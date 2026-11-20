@@ -546,20 +546,11 @@ export class SceneLayer implements CustomLayerInterface {
       this.sun.target.updateMatrixWorld();
     }
 
-    // build / stringing animations + distance LOD
+    // build / stringing animations (structures always use their full-detail model)
     let animating = false;
-    const lodFor = (mesh: THREE.Mesh, st: Structure, height: number) => {
-      const model = getModel(st.defId, st.voltage);
-      if (!model.lod) return;
-      const a = this.project(mesh.position);
-      const b = this.project(this.tmpV.copy(mesh.position).setZ(mesh.position.z + height * mesh.scale.x));
-      const px = a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
-      mesh.geometry = px < 170 ? model.lod : model.geometry;
-    };
     for (const s of this.structs.values()) {
       s.mesh.visible = show3D;
       if (s.glow) s.glow.visible = show3D;
-      if (show3D) lodFor(s.mesh, s.st, s.height);
       const t = (now - s.st.builtAt) / BUILD_MS;
       const grow = t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.pow(1 - t, 3);
       if (grow !== s.mesh.userData.grow) {
@@ -590,10 +581,6 @@ export class SceneLayer implements CustomLayerInterface {
       if (this.demolitions.update(now, anchor, show3D)) animating = true;
     }
     this.ghostGroup.visible = show3D;
-    this.ghostMeshes.forEach((m) => {
-      const st = m.userData.st as Structure | undefined;
-      if (m.visible && st) lodFor(m, st, getModel(st.defId, st.voltage).height);
-    });
 
     // clouds: a high deck that fades as the camera comes down
     // Visible while "flying" between regional and local views; faded out at

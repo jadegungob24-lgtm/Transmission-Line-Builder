@@ -41,6 +41,10 @@ interface State {
   voltage: VoltageId;
   chainFrom: string | null;
   selected: Selection | null;
+  /** Structures picked with Ctrl+click (2 or more = a multi-selection). */
+  multi: string[];
+  /** The line shown in the Plan & profile panel (any structure or span on it). */
+  profileOf: Selection | null;
   movingId: string | null;
   moveOrigin: { lng: number; lat: number; rotation: number } | null;
   autoConnect: boolean;
@@ -61,6 +65,10 @@ interface State {
   connect: (a: string, b: string, builtAt?: number) => string | null;
   removeStructure: (id: string) => void;
   removeSpan: (id: string) => void;
+  /** Remove several structures (and their spans) in one step. */
+  removeStructures: (ids: string[]) => void;
+  /** Ctrl+click: add a structure to, or take it out of, the multi-selection. */
+  toggleMulti: (id: string) => void;
   patchStructure: (id: string, p: Partial<Structure>, reorientNeighbours?: boolean) => void;
   /** Patch several structures at once, then re-orient them and their neighbours. */
   patchStructures: (p: Record<string, Partial<Structure>>) => void;
@@ -248,6 +256,8 @@ export const useStore = create<State>()((set, get) => ({
   voltage: 'v230',
   chainFrom: null,
   selected: null,
+  multi: [],
+  profileOf: null,
   movingId: null,
   moveOrigin: null,
   autoConnect: true,
@@ -318,6 +328,7 @@ export const useStore = create<State>()((set, get) => ({
       tool: t, buildDefId: t === 'build' || t === 'route' ? defId : null, voltage, movingId: null, moveOrigin: null, ghostRot: null,
       chainFrom: t === 'build' || t === 'connect' || t === 'route' ? (t === s.tool ? s.chainFrom : null) : null,
       selected: t === 'select' ? s.selected : null,
+      multi: t === 'select' ? s.multi : [],
     });
   },
 
@@ -365,9 +376,39 @@ export const useStore = create<State>()((set, get) => ({
     const st2 = reoriented(structures, spans, touched, s.autoOrient);
     set({
       structures: st2, spans, network: computeNetwork(st2, spans),
-      selected: null, chainFrom: s.chainFrom === id ? null : s.chainFrom,
+      selected: null, multi: s.multi.filter((x) => x !== id), chainFrom: s.chainFrom === id ? null : s.chainFrom,
       movingId: s.movingId === id ? null : s.movingId,
     });
+  },
+
+  removeStructures: (ids) => {
+    const s = get();
+    const gone = new Set(ids.filter((id) => s.structures[id]));
+    if (!gone.size) return;
+    const structures = { ...s.structures };
+    gone.forEach((id) => delete structures[id]);
+    const spans: Record<string, Span> = {};
+    const touched: string[] = [];
+    for (const sp of Object.values(s.spans)) {
+      if (gone.has(sp.a) || gone.has(sp.b)) touched.push(gone.has(sp.a) ? sp.b : sp.a);
+      else spans[sp.id] = sp;
+    }
+    const st2 = reoriented(structures, spans, touched.filter((id) => !gone.has(id)), s.autoOrient);
+    set({
+      structures: st2, spans, network: computeNetwork(st2, spans), selected: null, multi: [],
+      chainFrom: s.chainFrom && gone.has(s.chainFrom) ? null : s.chainFrom,
+      movingId: s.movingId && gone.has(s.movingId) ? null : s.movingId,
+    });
+  },
+
+  toggleMulti: (id) => {
+    const s = get();
+    if (!s.structures[id]) return;
+    const base = s.multi.length ? s.multi : s.selected?.kind === 'structure' ? [s.selected.id] : [];
+    const had = base.includes(id);
+    const multi = had ? base.filter((x) => x !== id) : [...base, id];
+    const primary = had ? multi[multi.length - 1] : id;
+    set({ multi, selected: primary ? { kind: 'structure', id: primary } : null });
   },
 
   removeSpan: (id) => {
@@ -422,6 +463,12 @@ export const useStore = create<State>()((set, get) => ({
 
   rotateSelected: (deg) => {
     const s = get();
+    if (!s.movingId && s.multi.length > 1) {
+      const p: Record<string, Partial<Structure>> = {};
+      for (const id of s.multi) if (s.structures[id]) p[id] = { rotation: (s.structures[id].rotation + deg + 360) % 360, manualRot: true };
+      get().patchStructures(p);
+      return;
+    }
     const id = s.movingId ?? (s.selected?.kind === 'structure' ? s.selected.id : null);
     if (id && s.structures[id]) {
       get().patchStructure(id, { rotation: (s.structures[id].rotation + deg + 360) % 360, manualRot: true });
@@ -430,7 +477,7 @@ export const useStore = create<State>()((set, get) => ({
     }
   },
 
-  clearAll: () => set({ structures: {}, spans: {}, network: computeNetwork({}, {}), selected: null, chainFrom: null, movingId: null }),
+  clearAll: () => set({ structures: {}, spans: {}, network: computeNetwork({}, {}), selected: null, multi: [], chainFrom: null, movingId: null }),
 
   exportSave: () => JSON.stringify({ version: 1, structures: get().structures, spans: get().spans }, null, 1),
 
@@ -530,12 +577,19 @@ function switchTo(id: string, projects: ProjectMeta[], data: NetData) {
   switching = true;
   useStore.setState({
     projects, projectId: id, ...data, network: computeNetwork(data.structures, data.spans),
-    selected: null, chainFrom: null, movingId: null, moveOrigin: null, tool: 'select', buildDefId: null, ghostRot: null, alignUndo: null,
+    selected: null, multi: [], profileOf: null, chainFrom: null, movingId: null, moveOrigin: null, tool: 'select', buildDefId: null, ghostRot: null, alignUndo: null,
   });
   switching = false;
   writeJson(PROJECTS_KEY, { current: id, list: projects });
 }
 let switching = false;
+
+// A plain selection change (click, Esc, inspecting a span…) ends a multi-selection;
+// toggleMulti changes both together, so it is left alone.
+useStore.subscribe((s, p) => {
+  if (s.selected !== p.selected && s.multi === p.multi && s.multi.length) useStore.setState({ multi: [] });
+  if (s.structures !== p.structures && s.multi.some((id) => !s.structures[id])) useStore.setState({ multi: s.multi.filter((id) => s.structures[id]) });
+});
 
 useStore.subscribe((s, p) => {
   if (switching || (s.structures === p.structures && s.spans === p.spans)) return;

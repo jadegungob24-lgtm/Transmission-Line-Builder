@@ -171,7 +171,7 @@ export class SceneLayer implements CustomLayerInterface {
     const c = map.getCenter();
     this.setOrigin({ lng: c.lng, lat: c.lat });
     this.unsub = useStore.subscribe((s, p) => {
-      if (s.structures !== p.structures || s.spans !== p.spans || s.network !== p.network || s.selected !== p.selected) this.dirty = true;
+      if (s.structures !== p.structures || s.spans !== p.spans || s.network !== p.network || s.selected !== p.selected || s.multi !== p.multi) this.dirty = true;
     });
   }
 
@@ -241,11 +241,13 @@ export class SceneLayer implements CustomLayerInterface {
 
   private sync() {
     this.shadowDirty = true;
-    const { structures, spans, network, selected } = useStore.getState();
+    const { structures, spans, network, selected, multi } = useStore.getState();
     const hl = this.highlight;
+    const multiSet = new Set(multi);
     const hlFor = (kind: 'structure' | 'span', id: string) => {
       if (hl && hl.kind === kind && hl.id === id) return hl.mode;
       if (selected && selected.kind === kind && selected.id === id) return 'select';
+      if (kind === 'structure' && multiSet.has(id)) return 'select';
       return null;
     };
 

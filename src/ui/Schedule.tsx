@@ -137,13 +137,15 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
   const ex = useStore((s) => s.env.exaggeration);
   const selected = useStore((s) => s.selected);
   const movingId = useStore((s) => s.movingId);
+  const multi = useStore((s) => s.multi);
   const project = useStore((s) => s.projects.find((p) => p.id === s.projectId)?.name ?? '');
   const rows = useMemo(() => scheduleRows(structures, spans, ex), [structures, spans, ex]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const focus = (r: ScheduleRow) => {
-    useStore.getState().set({ selected: { kind: 'structure', id: r.id } });
+  const focus = (r: ScheduleRow, e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) return useStore.getState().toggleMulti(r.id);
+    useStore.getState().set({ selected: { kind: 'structure', id: r.id }, multi: [] });
     const map = runtime.map;
     runtime.nav?.interrupt();
     map?.easeTo({ center: [r.lng, r.lat], zoom: Math.max(map.getZoom(), 16), duration: 800 });
@@ -188,7 +190,7 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className={r.id === activeId ? 'on' : ''} onClick={() => focus(r)} title="Click to select and fly to it">
+                <tr key={r.id} className={r.id === activeId ? 'on' : multi.includes(r.id) ? 'multi' : ''} onClick={(e) => focus(r, e)} title="Click to select and fly to it · Ctrl+click to select several">
                   <td><b>{r.tag}</b></td>
                   <td>{DEF_BY_ID[structures[r.id].defId].short}</td>
                   <td>{r.voltage}</td>

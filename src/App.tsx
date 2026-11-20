@@ -6,6 +6,7 @@ import { northUp, resetTilt, resetView } from './map/navigation';
 import { runtime, setView } from './map/runtime';
 import { NavWidget } from './ui/NavWidget';
 import { Hud, InfoPanel, Rain, Settings, SideTools, TopBar, Welcome } from './ui/Panels';
+import { ProfilePanel } from './ui/Profile';
 import { SchedulePanel } from './ui/Schedule';
 import { focusSearch } from './ui/Search';
 import { Toolbar } from './ui/Toolbar';
@@ -19,6 +20,7 @@ const HELD_KEYS = new Set([
 export default function App() {
   const [settings, setSettings] = useState(false);
   const [schedule, setSchedule] = useState(false);
+  const profileOpen = useStore((s) => s.profileOf != null);
   const showWelcome = useStore((s) => s.showWelcome);
   const set = useStore((s) => s.set);
 
@@ -95,7 +97,8 @@ export default function App() {
         case '3': setView('ground'); break;
         case 'delete':
         case 'backspace':
-          if (s.selected?.kind === 'structure') s.removeStructure(s.selected.id);
+          if (s.multi.length > 1) s.removeStructures(s.multi);
+          else if (s.selected?.kind === 'structure') s.removeStructure(s.selected.id);
           else if (s.selected?.kind === 'span') s.removeSpan(s.selected.id);
           break;
         case '[':
@@ -135,7 +138,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app">
+    <div className={`app${profileOpen ? ' profile-open' : ''}`}>
       <MapView />
       <Rain />
       <TopBar onSettings={() => setSettings(true)} onHelp={() => set({ showWelcome: true })} onSchedule={() => setSchedule(!schedule)} scheduleOpen={schedule} />
@@ -145,6 +148,7 @@ export default function App() {
       <NavWidget />
       <Hud />
       <Toolbar />
+      <ProfilePanel />
       {settings && <Settings onClose={() => setSettings(false)} />}
       {showWelcome && <Welcome onClose={() => set({ showWelcome: false })} />}
     </div>

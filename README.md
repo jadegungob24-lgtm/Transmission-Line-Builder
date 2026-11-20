@@ -94,6 +94,15 @@ Each tower or pole's **insulator length** can be adjusted in its info panel
 conductors lower and the sag/clearance update). **Straighten section** lines up the suspension towers between two angle/dead-end
 towers on a straight, evenly spaced path (with Undo).
 
+**Multi-select:** Ctrl+click structures (on the map or in the schedule) to select
+several, then rotate, set insulator length, auto-orient or demolish them together.
+
+**Plan & profile:** from any tower, pole or span, a drawing of the whole line:
+ground profile, every structure, the sagging lowest conductor and earth wire of
+each span, the clearance target (spans below it in red), chainage, and a
+straightened plan strip with deflection angles and span lengths. Hover for
+elevations and clearance, click a structure to select it, download as SVG.
+
 **Projects & tower schedule:** each project is its own network, saved in the
 browser (new / open / rename / delete from the top bar). Every structure gets a
 number in the order it is plotted (T-001, SS-002 …). The tower schedule lists them

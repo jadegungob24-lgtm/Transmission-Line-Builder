@@ -103,7 +103,9 @@ export function InfoPanel() {
   const spans = useStore((s) => s.spans);
   const net = useStore((s) => s.network);
   const movingId = useStore((s) => s.movingId);
+  const multiCount = useStore((s) => s.multi.length);
   const set = useStore((s) => s.set);
+  if (multiCount > 1 && !movingId) return <MultiPanel />;
   // While a structure is being moved its panel stays open, so the coordinates update live.
   const structId = movingId ?? (selected?.kind === 'structure' ? selected.id : null);
   if (!structId && !selected) return <NetworkPanel />;
@@ -154,6 +156,13 @@ export function InfoPanel() {
           )}
         </div>
         {!moving && <AlignSection sel={{ kind: 'structure', id: st.id }} />}
+        {!moving && nb.length > 0 && nb.length <= 2 && (
+          <div className="info-actions">
+            <button onClick={() => useStore.getState().set({ profileOf: { kind: 'structure', id: st.id } })} title="Ground profile, conductor sag and clearance along the whole line">
+              📈 Plan &amp; profile
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -213,6 +222,9 @@ function SpanInfo({ id }: { id: string }) {
       )}
       {isFinite(data.clearance) && data.clearance < minClear && <p className="bad small">Below the {minClear} m clearance target. Use taller structures or shorten the span.</p>}
       <div className="info-actions">
+        <button onClick={() => useStore.getState().set({ profileOf: { kind: 'span', id: sp.id } })} title="Ground profile, conductor sag and clearance along the whole line">
+          📈 Plan &amp; profile
+        </button>
         <button className="danger" onClick={() => useStore.getState().removeSpan(sp.id)}>Remove conductors</button>
       </div>
       <AlignSection sel={{ kind: 'span', id: sp.id }} />
@@ -292,6 +304,83 @@ function NetworkPanel() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** Several structures picked with Ctrl+click: summary and actions that apply to all of them. */
+function MultiPanel() {
+  const multi = useStore((s) => s.multi);
+  const structures = useStore((s) => s.structures);
+  const [ins, setIns] = useState('');
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const sts = multi.map((id) => structures[id]).filter(Boolean).sort((a, b) => (a.no ?? 0) - (b.no ?? 0));
+  const byType = new Map<string, number>();
+  sts.forEach((st) => byType.set(DEF_BY_ID[st.defId].short, (byType.get(DEF_BY_ID[st.defId].short) ?? 0) + 1));
+  const lineSts = sts.filter((st) => insulatorRange(st.defId, st.voltage));
+  const close = () => useStore.getState().set({ selected: null, multi: [] });
+
+  const applyIns = (reset: boolean) => {
+    const v = parseFloat(ins);
+    if (!reset && !isFinite(v)) return setMsg({ text: 'Enter a length in metres', ok: false });
+    const patch: Record<string, Partial<Structure>> = {};
+    const skipped: string[] = [];
+    for (const st of lineSts) {
+      const r = insulatorRange(st.defId, st.voltage)!;
+      if (reset) patch[st.id] = { insLen: undefined };
+      else if (v < r.min - 1e-9 || v > r.max + 1e-9) skipped.push(structureTag(st));
+      else patch[st.id] = { insLen: Math.abs(v - r.std) < 0.005 ? undefined : Math.round(v * 100) / 100 };
+    }
+    useStore.getState().patchStructures(patch);
+    const n = Object.keys(patch).length;
+    setMsg({
+      text: `${reset ? 'Reset' : 'Set'} insulator length on ${n} structure${n === 1 ? '' : 's'}${skipped.length ? ` · outside the allowed range for ${skipped.join(', ')}` : ''}`,
+      ok: skipped.length === 0,
+    });
+  };
+  const autoOrient = () => {
+    const patch: Record<string, Partial<Structure>> = {};
+    sts.forEach((st) => { if (st.manualRot) patch[st.id] = { manualRot: false }; });
+    useStore.getState().patchStructures(patch);
+  };
+  const demolish = () => {
+    if (confirm(`Demolish ${sts.length} structures and their conductors?`)) useStore.getState().removeStructures(sts.map((s) => s.id));
+  };
+
+  return (
+    <div className="info panel">
+      <div className="info-head">
+        <b>{sts.length} structures selected</b>
+        <button className="x" onClick={close} title="Clear selection (Esc)">×</button>
+      </div>
+      <div className="multi-tags">
+        {sts.map((st) => (
+          <button key={st.id} onClick={() => useStore.getState().toggleMulti(st.id)} title="Remove from the selection">
+            {structureTag(st)} <span className="muted">×</span>
+          </button>
+        ))}
+      </div>
+      {[...byType].map(([t, n]) => <Row key={t} k={t} v={`× ${n}`} />)}
+      {lineSts.length > 0 && (
+        <div className="multi-ins">
+          <span className="muted">Insulator length</span>
+          <span className="ins-ctl">
+            <input type="number" step={0.1} placeholder="m" value={ins} onChange={(e) => setIns(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyIns(false); }} />
+            <button className="ins-ok" onClick={() => applyIns(false)} title={`Apply to all ${lineSts.length} towers/poles`}>✓</button>
+          </span>
+        </div>
+      )}
+      {lineSts.length > 0 && (
+        <div className="ins-note"><button className="link" onClick={() => applyIns(true)}>Reset all to standard</button></div>
+      )}
+      {msg && <p className={`small ${msg.ok ? 'ok' : 'bad'}`}>{msg.text}</p>}
+      <div className="info-actions">
+        <button onClick={() => runtime.ctrl?.rotate(-15)} title="Rotate all (Shift+T)">⟲ 15°</button>
+        <button onClick={() => runtime.ctrl?.rotate(15)} title="Rotate all (T)">⟳ 15°</button>
+        {sts.some((st) => st.manualRot) && <button onClick={autoOrient}>Auto-orient</button>}
+        <button className="danger" onClick={demolish}>Demolish all</button>
+      </div>
+      <p className="muted small">Ctrl+click structures to add or remove them · Delete removes all · Esc clears</p>
     </div>
   );
 }

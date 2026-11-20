@@ -352,7 +352,7 @@ export class Controller {
       case 'select': {
         this.layer.setGhost(null);
         this.layer.setHighlight(hit ? { ...hit, mode: 'hover' } : null);
-        this.msg(hit ? 'Click to inspect' : '');
+        this.msg(hit ? (hit.kind === 'structure' ? 'Click to inspect · Ctrl+click to select several' : 'Click to inspect') : '');
         return;
       }
       case 'bulldoze': {
@@ -464,9 +464,13 @@ export class Controller {
     const hitSt = hit?.kind === 'structure' ? s.structures[hit.id] : null;
 
     switch (s.tool) {
-      case 'select':
-        s.set({ selected: hit });
+      case 'select': {
+        const ev = e.originalEvent as MouseEvent;
+        if ((ev.ctrlKey || ev.metaKey) && hit?.kind === 'structure') s.toggleMulti(hit.id);
+        else if (ev.ctrlKey || ev.metaKey) break; // Ctrl+click on empty ground keeps the selection
+        else s.set({ selected: hit, multi: [] });
         break;
+      }
       case 'bulldoze':
         if (hit?.kind === 'structure') s.removeStructure(hit.id);
         else if (hit?.kind === 'span') s.removeSpan(hit.id);
@@ -554,7 +558,7 @@ export class Controller {
     } else if (s.tool !== 'select') {
       s.setTool('select');
     } else {
-      s.set({ selected: null });
+      s.set({ selected: null, multi: [] });
     }
     this.msg('');
     this.refresh();

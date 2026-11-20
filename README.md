@@ -89,14 +89,17 @@ ghost preview that turns green or red with a reason, T to rotate, and checks for
 territory, water and spacing. You can move a structure (wires update live, and the
 info panel shows its PRS92 coordinates changing) or type PRS92 coordinates to put it
 at an exact spot, and bulldoze it with a topple/collapse animation.
-**Straighten section** lines up the suspension towers between two angle/dead-end
+Each tower or pole's **insulator length** can be adjusted in its info panel
+(− / +, or type a value; the crossarms stay fixed, so longer strings hang the
+conductors lower and the sag/clearance update). **Straighten section** lines up the suspension towers between two angle/dead-end
 towers on a straight, evenly spaced path (with Undo).
 
 **Projects & tower schedule:** each project is its own network, saved in the
 browser (new / open / rename / delete from the top bar). Every structure gets a
 number in the order it is plotted (T-001, SS-002 …). The tower schedule lists them
 live with PRS92 zone, northing/easting, lat/lng, elevation, height, heading, line
-angle and connections, and exports to Excel (.xlsx, with a Spans sheet).
+angle and connections, and exports to Excel (.xlsx, with a Spans sheet) or to
+Google Earth (.kmz: a pin per structure with its details, plus the lines).
 
 **Phase 3 — conductors:** stringing between towers is automatic while you
 place them, and you can also string between existing structures. Spans follow

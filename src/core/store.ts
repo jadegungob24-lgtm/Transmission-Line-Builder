@@ -210,7 +210,7 @@ function sanitize(d: any): NetData {
   const spans: Record<string, Span> = {};
   for (const s of Object.values<any>(d.structures)) {
     if (s && DEF_BY_ID[s.defId] && VOLTAGES[s.voltage as VoltageId] && isFinite(s.lng) && isFinite(s.lat))
-      structures[s.id] = { ...s, elev: s.elev ?? 0, builtAt: 0 };
+      structures[s.id] = { ...s, elev: s.elev ?? 0, builtAt: 0, insLen: typeof s.insLen === 'number' && s.insLen > 0 ? s.insLen : undefined };
   }
   // number any structures saved before numbering existed, in their saved order
   let next = nextNo(structures);

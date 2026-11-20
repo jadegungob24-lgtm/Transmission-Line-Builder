@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { CustomLayerInterface, CustomRenderMethodInput, Map as MLMap } from 'maplibre-gl';
-import { DEF_BY_ID, getModel } from '../catalog/structures';
+import { DEF_BY_ID, getModel, modelOf } from '../catalog/structures';
 import { VOLTAGES } from '../catalog/voltages';
 import { buildSpanGeometry, layoutSpan, SpanLayout, wireHeightAt } from '../conductors/spanWires';
 import { makeWireMaterial, wireShared } from '../conductors/wireMaterial';
@@ -259,8 +259,7 @@ export class SceneLayer implements CustomLayerInterface {
     for (const [id, s] of this.structs) {
       if (!structures[id]) {
         if (animateRemoval && s.mesh.userData.grow > 0) {
-          const m = getModel(s.st.defId, s.st.voltage);
-          s.mesh.geometry = m.geometry; // full detail, not the distance LOD
+          const m = modelOf(s.st);
           this.demolitions.addStructure(s.mesh, s.glow, {
             lng: s.st.lng, lat: s.st.lat, elev: s.st.elev, heading: s.st.rotation,
             height: s.height, radius: m.radius, topple: DEF_BY_ID[s.st.defId].role === 'line',
@@ -273,14 +272,14 @@ export class SceneLayer implements CustomLayerInterface {
       }
     }
     for (const st of Object.values(structures)) {
-      const key = `${st.defId}|${st.voltage}`;
+      const key = `${st.defId}|${st.voltage}|${st.insLen ?? ''}`;
       let s = this.structs.get(st.id);
       if (!s || s.key !== key) {
         if (s) {
           this.scene.remove(s.mesh);
           if (s.glow) this.scene.remove(s.glow);
         }
-        const m = getModel(st.defId, st.voltage);
+        const m = modelOf(st);
         const mesh = new THREE.Mesh(m.geometry, this.matStruct);
         mesh.castShadow = true;
         mesh.userData.grow = 1;
@@ -317,7 +316,7 @@ export class SceneLayer implements CustomLayerInterface {
       const A = structures[sp.a];
       const B = structures[sp.b];
       if (!A || !B) continue;
-      const key = `${A.lng},${A.lat},${A.rotation},${A.elev},${A.defId}|${B.lng},${B.lat},${B.rotation},${B.elev},${B.defId}|${sp.slotsA}|${sp.slotsB}`;
+      const key = `${A.lng},${A.lat},${A.rotation},${A.elev},${A.defId},${A.insLen}|${B.lng},${B.lat},${B.rotation},${B.elev},${B.defId},${B.insLen}|${sp.slotsA}|${sp.slotsB}`;
       let w = this.wires.get(sp.id);
       if (!w || w.key !== key) {
         const layout = layoutSpan(sp, A, B);
@@ -359,7 +358,7 @@ export class SceneLayer implements CustomLayerInterface {
       m.visible = i < n;
       if (i < n && g) {
         const st = g.structures[i];
-        m.geometry = getModel(st.defId, st.voltage).geometry;
+        m.geometry = modelOf(st).geometry;
         m.userData.st = st;
         m.material = g.valid[i] ? this.matGhostOk : this.matGhostBad;
         this.placeMesh(m, st);

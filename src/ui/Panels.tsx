@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DEF_BY_ID, getModel } from '../catalog/structures';
+import { DEF_BY_ID, insulatorRange, modelOf } from '../catalog/structures';
 import { VOLTAGES, VoltageId } from '../catalog/voltages';
 import { layoutSpan, wireHeightAt } from '../conductors/spanWires';
 import { makeCatenary, wireLength } from '../conductors/catenary';
 import { bearingDeg } from '../core/geo';
 import { formatPrs92, fromPrs92, PTM_ZONES, toPrs92 } from '../core/prs92';
 import { structureTag, useHud, useStore } from '../core/store';
+import type { Structure } from '../core/types';
 import { lineAngle, neighbours } from '../network/connectivity';
 import { SUN } from '../map/environment';
 import { flyTo, runtime, setView } from '../map/runtime';
@@ -112,7 +113,7 @@ export function InfoPanel() {
     if (!st) return null;
     const moving = movingId === st.id;
     const def = DEF_BY_ID[st.defId];
-    const m = getModel(st.defId, st.voltage);
+    const m = modelOf(st);
     const nb = neighbours(st.id, spans);
     const ang = lineAngle(st, structures, spans);
     const ex = useStore.getState().env.exaggeration || 1;
@@ -129,6 +130,7 @@ export function InfoPanel() {
         {def.voltages !== 'any' && <Row k="Voltage class" v={<span style={{ color: VOLTAGES[st.voltage].color }}>{VOLTAGES[st.voltage].label}</span>} />}
         <Row k="Circuits" v={def.role === 'line' ? `${def.circuits}` : `${m.circuits.length} line bays`} />
         <Row k="Height" v={`${m.height.toFixed(1)} m`} />
+        <InsulatorRow st={st} />
         <Row k="Ground elevation" v={`${(st.elev / ex).toFixed(0)} m`} />
         <Row k="Heading" v={`${st.rotation.toFixed(0)}°${st.manualRot ? ' (manual)' : ''}`} />
         <Row k="Connections" v={`${nb.length}`} />
@@ -291,6 +293,69 @@ function NetworkPanel() {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Insulator string length of a line structure. − / + nudge it by 0.1 m, clicking the
+ * value lets you type one, and "Standard" goes back to the voltage class default.
+ * The crossarms stay put, so a longer string hangs the conductors lower.
+ */
+function InsulatorRow({ st }: { st: Structure }) {
+  const [edit, setEdit] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { setEdit(null); setErr(null); }, [st.id]);
+  const r = insulatorRange(st.defId, st.voltage);
+  if (!r) return null;
+  const cur = st.insLen ?? r.std;
+  const isStd = Math.abs(cur - r.std) < 0.005;
+
+  const apply = (v: number) => {
+    if (!isFinite(v)) return setErr('Enter a length in metres');
+    if (v < r.min - 1e-9 || v > r.max + 1e-9) return setErr(`Allowed range for this structure: ${r.min.toFixed(1)}–${r.max.toFixed(1)} m`);
+    const val = Math.round(v * 100) / 100;
+    useStore.getState().patchStructure(st.id, { insLen: Math.abs(val - r.std) < 0.005 ? undefined : val });
+    setErr(null);
+    setEdit(null);
+  };
+  const nudge = (d: number) => apply(Math.min(r.max, Math.max(r.min, Math.round((cur + d) * 10) / 10)));
+
+  return (
+    <>
+      <div className="row ins-row">
+        <span className="muted">Insulator length</span>
+        {edit == null ? (
+          <span className="ins-ctl">
+            <button onClick={() => nudge(-0.1)} disabled={cur <= r.min + 1e-9} title="Shorter by 0.1 m">−</button>
+            <button className="ins-val" onClick={() => { setErr(null); setEdit(cur.toFixed(2)); }} title="Click to type a length">
+              {cur.toFixed(2)} m
+            </button>
+            <button onClick={() => nudge(0.1)} disabled={cur >= r.max - 1e-9} title="Longer by 0.1 m">+</button>
+          </span>
+        ) : (
+          <span className="ins-ctl">
+            <input
+              autoFocus type="number" step={0.05} min={r.min} max={r.max} value={edit}
+              onChange={(e) => setEdit(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') apply(parseFloat(edit)); if (e.key === 'Escape') { setEdit(null); setErr(null); } }}
+            />
+            <span className="muted">m</span>
+            <button className="ins-ok" onClick={() => apply(parseFloat(edit))} title="Apply">✓</button>
+          </span>
+        )}
+      </div>
+      <div className="ins-note">
+        {isStd ? (
+          <span className="muted small">Standard for {VOLTAGES[st.voltage].label}</span>
+        ) : (
+          <span className="small">
+            <span className="muted">Standard {r.std.toFixed(2)} m · </span>
+            <button className="link" onClick={() => apply(r.std)}>Reset to standard</button>
+          </span>
+        )}
+      </div>
+      {err && <p className="bad small">{err}</p>}
+    </>
   );
 }
 

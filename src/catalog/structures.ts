@@ -44,7 +44,10 @@ export interface StructureDef {
   maxAngle?: number;
   capacityMW?: number;
   loadMW?: number;
-  build: (v: VoltageSpec) => BuiltModel;
+  /** Standard insulator length when it differs from the voltage class's (m). */
+  insDefault?: (v: VoltageSpec) => number;
+  /** `ins`: insulator string length (m); omitted = the standard for this class. */
+  build: (v: VoltageSpec, ins?: number) => BuiltModel;
 }
 
 // ---------------------------------------------------------------- lattice towers
@@ -58,13 +61,14 @@ interface TowerOpts {
   banded?: boolean;
 }
 
-function latticeTower(v: VoltageSpec, o: TowerOpts): BuiltModel {
+function latticeTower(v: VoltageSpec, o: TowerOpts, ins = v.insLen): BuiltModel {
   const B = new Builder();
-  const ins = v.insLen;
   const baseScale = o.baseScale ?? 1;
   const waistScale = o.waistScale ?? 1;
   const levelStep = o.circuits === 2 ? v.vSpacing : v.vSpacing * 0.72;
-  const zArm0 = v.baseHeight + (o.extraHeight ?? 0) + (o.strain ? 0 : ins);
+  // The tower body is sized for the standard string of its voltage class; a custom
+  // string length only changes the strings, so longer ones hang the conductor lower.
+  const zArm0 = v.baseHeight + (o.extraHeight ?? 0) + (o.strain ? 0 : v.insLen);
   const armZ = [zArm0, zArm0 + levelStep, zArm0 + 2 * levelStep];
   const depth = Math.min(levelStep * 0.45, 2.4);
   const hwTop = Math.max(0.7, v.armLen * 0.2) * waistScale;
@@ -161,7 +165,7 @@ function latticeTower(v: VoltageSpec, o: TowerOpts): BuiltModel {
 
 // ---------------------------------------------------------------- poles
 
-function steelPole(v: VoltageSpec, nCircuits: 1 | 2): BuiltModel {
+function steelPole(v: VoltageSpec, nCircuits: 1 | 2, ins = v.insLen): BuiltModel {
   const B = new Builder();
   const z0 = v.baseHeight * 0.82;
   const step = v.vSpacing * (nCircuits === 2 ? 1 : 0.75);
@@ -177,11 +181,13 @@ function steelPole(v: VoltageSpec, nCircuits: 1 | 2): BuiltModel {
       const ci = nCircuits === 2 ? (s < 0 ? 0 : 1) : 0;
       if (nCircuits === 2) {
         const L = v.armLen * 0.85;
-        B.beam(v3(0, 0, z + 0.2), v3(s * L, 0, z + v.insLen + 0.5), 0.16, COL.steelDark);
-        B.insulator(v3(s * L, 0, z + v.insLen + 0.5), v3(s * L, 0, z + 0.5), insCol, 0.14);
-        circuits[ci].push(v3(s * L, 0, z + 0.4));
+        // davit arm end is fixed; the suspension string hangs `ins` below it
+        const armEnd = z + v.insLen + 0.5;
+        B.beam(v3(0, 0, z + 0.2), v3(s * L, 0, armEnd), 0.16, COL.steelDark);
+        B.insulator(v3(s * L, 0, armEnd), v3(s * L, 0, armEnd - ins), insCol, 0.14);
+        circuits[ci].push(v3(s * L, 0, armEnd - ins - 0.1));
       } else {
-        const tip = v3(s * (0.3 + v.insLen), 0, z + 0.35);
+        const tip = v3(s * (0.3 + ins), 0, z + 0.35);
         B.insulator(v3(s * 0.2, 0, z), tip, insCol, 0.14);
         circuits[ci].push(tip);
       }
@@ -197,7 +203,7 @@ function steelPole(v: VoltageSpec, nCircuits: 1 | 2): BuiltModel {
   return { geometry: B.build(), lod: L.build(), circuits, groundWires: [v3(0, 0, H)], strain: false, exclusive: false, height: H, radius: 2.5 };
 }
 
-function distributionPole(): BuiltModel {
+function distributionPole(ins = 0.33): BuiltModel {
   const B = new Builder();
   const H = 11;
   B.cyl(v3(0, 0, -1.5), v3(0, 0, H), 0.2, 0.12, COL.concrete, 10);
@@ -206,8 +212,9 @@ function distributionPole(): BuiltModel {
   B.beam(v3(0.8, 0, 10.15), v3(0, 0, 9.4), 0.05, COL.steelDark);
   const phases: V3[] = [];
   for (const x of [-1.1, 0.45, 1.1]) {
-    B.cyl(v3(x, 0, 10.27), v3(x, 0, 10.6), 0.08, 0.05, COL.porcelain, 6);
-    phases.push(v3(x, 0, 10.62));
+    // pin insulators stand up from the crossarm
+    B.cyl(v3(x, 0, 10.27), v3(x, 0, 10.27 + ins), 0.08, 0.05, COL.porcelain, 6);
+    phases.push(v3(x, 0, 10.29 + ins));
   }
   B.cyl(v3(0.16, 0, 8.5), v3(0.3, 0, 8.5), 0.07, 0.07, COL.porcelain, 6);
   // pole-mounted distribution transformer
@@ -345,55 +352,56 @@ export const STRUCTURE_DEFS: StructureDef[] = [
     id: 'dc-suspension', name: 'Double-Circuit Suspension Tower', short: 'DC Suspension', category: 'tower', icon: 'dc',
     description: 'Vertical-configuration lattice tower carrying two circuits on I-string insulators. The standard tangent structure.',
     voltages: HV, role: 'line', circuits: 2, spanFactor: 1, maxAngle: 3,
-    build: (v) => latticeTower(v, { circuits: 2, strain: false }),
+    build: (v, ins) => latticeTower(v, { circuits: 2, strain: false }, ins),
   },
   {
     id: 'sc-suspension', name: 'Single-Circuit Suspension Tower', short: 'SC Suspension', category: 'tower', icon: 'sc',
     description: 'Triangular-configuration lattice tower for one circuit.',
     voltages: HV, role: 'line', circuits: 1, spanFactor: 1, maxAngle: 3,
-    build: (v) => latticeTower(v, { circuits: 1, strain: false }),
+    build: (v, ins) => latticeTower(v, { circuits: 1, strain: false }, ins),
   },
   {
     id: 'dc-angle', name: 'Angle Tower (Double Circuit)', short: 'Angle', category: 'tower', icon: 'angle',
     description: 'Strain tower with jumper loops for line deflections up to about 30°.',
     voltages: HV, role: 'line', circuits: 2, spanFactor: 1.1, maxAngle: 30,
-    build: (v) => latticeTower(v, { circuits: 2, strain: true, baseScale: 1.15, waistScale: 1.2 }),
+    build: (v, ins) => latticeTower(v, { circuits: 2, strain: true, baseScale: 1.15, waistScale: 1.2 }, ins),
   },
   {
     id: 'dc-deadend', name: 'Tension / Dead-End Tower (Double Circuit)', short: 'Dead-End', category: 'tower', icon: 'deadend',
     description: 'Heavy strain tower for terminations, section points and large angles up to 90°.',
     voltages: HV, role: 'line', circuits: 2, spanFactor: 1.25, maxAngle: 90,
-    build: (v) => latticeTower(v, { circuits: 2, strain: true, baseScale: 1.35, waistScale: 1.45 }),
+    build: (v, ins) => latticeTower(v, { circuits: 2, strain: true, baseScale: 1.35, waistScale: 1.45 }, ins),
   },
   {
     id: 'sc-deadend', name: 'Tension / Dead-End Tower (Single Circuit)', short: 'SC Dead-End', category: 'tower', icon: 'scdeadend',
     description: 'Single-circuit strain tower for terminations and angles.',
     voltages: HV, role: 'line', circuits: 1, spanFactor: 1.25, maxAngle: 90,
-    build: (v) => latticeTower(v, { circuits: 1, strain: true, baseScale: 1.3, waistScale: 1.4 }),
+    build: (v, ins) => latticeTower(v, { circuits: 1, strain: true, baseScale: 1.3, waistScale: 1.4 }, ins),
   },
   {
     id: 'dc-crossing', name: 'Special Crossing Tower', short: 'Crossing', category: 'tower', icon: 'crossing',
     description: 'Extra-tall strain tower with aviation banding for river, strait and valley crossings. Allows spans up to 2.5× normal.',
     voltages: HV, role: 'line', circuits: 2, spanFactor: 2.5, maxAngle: 20,
-    build: (v) => latticeTower(v, { circuits: 2, strain: true, extraHeight: v.baseHeight * 0.9 + 10, baseScale: 1.7, waistScale: 1.5, banded: true }),
+    build: (v, ins) => latticeTower(v, { circuits: 2, strain: true, extraHeight: v.baseHeight * 0.9 + 10, baseScale: 1.7, waistScale: 1.5, banded: true }, ins),
   },
   {
     id: 'pole-sc', name: 'Steel Pole (Single Circuit)', short: 'Steel Pole SC', category: 'pole', icon: 'pole',
     description: 'Tubular steel pole with line-post insulators for sub-transmission along roads.',
     voltages: SUBTRANS, role: 'line', circuits: 1, spanFactor: 0.6, maxAngle: 8,
-    build: (v) => steelPole(v, 1),
+    build: (v, ins) => steelPole(v, 1, ins),
   },
   {
     id: 'pole-dc', name: 'Steel Pole (Double Circuit)', short: 'Steel Pole DC', category: 'pole', icon: 'poledc',
     description: 'Tubular steel pole with davit arms carrying two circuits.',
     voltages: SUBTRANS, role: 'line', circuits: 2, spanFactor: 0.6, maxAngle: 8,
-    build: (v) => steelPole(v, 2),
+    build: (v, ins) => steelPole(v, 2, ins),
   },
   {
     id: 'pole-dist', name: 'Distribution Pole (13.8 kV)', short: 'Dist. Pole', category: 'pole', icon: 'dist',
     description: 'Concrete distribution pole with crossarm, pin insulators, neutral and a pole-mounted transformer.',
     voltages: ['v13'], role: 'line', circuits: 1, spanFactor: 1, maxAngle: 15,
-    build: () => distributionPole(),
+    insDefault: () => 0.33,
+    build: (_v, ins) => distributionPole(ins),
   },
   {
     id: 'substation', name: 'Transmission Substation', short: 'Substation', category: 'substation', icon: 'substation',
@@ -418,16 +426,34 @@ export const STRUCTURE_DEFS: StructureDef[] = [
 export const DEF_BY_ID: Record<string, StructureDef> = Object.fromEntries(STRUCTURE_DEFS.map((d) => [d.id, d]));
 
 const cache = new Map<string, BuiltModel>();
-/** Built models are cached per (definition, voltage) and shared by every instance. */
-export function getModel(defId: string, voltage: VoltageId): BuiltModel {
+/**
+ * Built models are cached per (definition, voltage, insulator length) and shared
+ * by every instance. `insLen` omitted = the standard string for that class.
+ */
+export function getModel(defId: string, voltage: VoltageId, insLen?: number): BuiltModel {
   const def = DEF_BY_ID[defId];
-  const key = def.voltages === 'any' ? defId : `${defId}|${voltage}`;
+  const custom = insLen != null && insulatorRange(defId, voltage) != null;
+  const key = def.voltages === 'any' ? defId : `${defId}|${voltage}${custom ? `|${insLen.toFixed(2)}` : ''}`;
   let m = cache.get(key);
   if (!m) {
-    m = def.build(VOLTAGES[voltage]);
+    m = def.build(VOLTAGES[voltage], custom ? insLen : undefined);
     cache.set(key, m);
   }
   return m;
+}
+
+/** The model for a placed structure, including its own insulator length. */
+export function modelOf(st: { defId: string; voltage: VoltageId; insLen?: number }): BuiltModel {
+  return getModel(st.defId, st.voltage, st.insLen);
+}
+
+/** Standard, minimum and maximum insulator length for a line structure (m); null for stations. */
+export function insulatorRange(defId: string, voltage: VoltageId): { std: number; min: number; max: number } | null {
+  const def = DEF_BY_ID[defId];
+  if (!def || def.role !== 'line') return null;
+  const v = VOLTAGES[voltage];
+  const std = def.insDefault ? def.insDefault(v) : v.insLen;
+  return { std, min: Math.max(0.1, Math.round(std * 0.3 * 10) / 10), max: Math.round(std * 2 * 10) / 10 };
 }
 
 export function defSupports(def: StructureDef, v: VoltageId) {

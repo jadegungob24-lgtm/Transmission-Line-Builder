@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import writeXlsxFile from 'write-excel-file/browser';
-import { DEF_BY_ID, getModel } from '../catalog/structures';
+import { DEF_BY_ID, insulatorRange, modelOf } from '../catalog/structures';
 import { VOLTAGES } from '../catalog/voltages';
 import { bearingDeg, distanceM } from '../core/geo';
+import { buildKmz } from '../core/kmz';
 import { toPrs92 } from '../core/prs92';
 import { structureTag, useStore } from '../core/store';
 import type { Span, Structure } from '../core/types';
@@ -24,6 +25,8 @@ export interface ScheduleRow {
   lng: number;
   elev: number;
   height: number;
+  /** Insulator string length (m); null for stations. */
+  insulator: number | null;
   heading: number;
   angle: number | null;
   links: string;
@@ -52,7 +55,8 @@ export function scheduleRows(structures: Record<string, Structure>, spans: Recor
         lat: st.lat,
         lng: st.lng,
         elev: st.elev / (exaggeration || 1),
-        height: getModel(st.defId, st.voltage).height,
+        height: modelOf(st).height,
+        insulator: insulatorRange(st.defId, st.voltage) ? st.insLen ?? insulatorRange(st.defId, st.voltage)!.std : null,
         heading: st.rotation,
         angle: lineAngle(st, structures, spans),
         links,
@@ -82,12 +86,14 @@ export async function exportScheduleXlsx() {
   const num = (v: number, format: string) => ({ value: v, type: Number, format });
 
   const towers = [
-    ['No.', 'Structure type', 'Voltage', 'PRS92 zone', 'Northing (m)', 'Easting (m)', 'Latitude (°)', 'Longitude (°)', 'Ground elev. (m)', 'Height (m)', 'Heading (°)', 'Line angle (°)', 'Connected to'].map(head),
+    ['No.', 'Structure type', 'Voltage', 'PRS92 zone', 'Northing (m)', 'Easting (m)', 'Latitude (°)', 'Longitude (°)', 'Ground elev. (m)', 'Height (m)', 'Insulator (m)', 'Heading (°)', 'Line angle (°)', 'Connected to'].map(head),
     ...rows.map((r) => [
       r.tag, r.type, r.voltage, r.zone,
       num(r.northing, '#,##0.000'), num(r.easting, '#,##0.000'),
       num(r.lat, '0.000000'), num(r.lng, '0.000000'),
-      num(r.elev, '0.0'), num(r.height, '0.0'), num(r.heading, '0.0'),
+      num(r.elev, '0.0'), num(r.height, '0.0'),
+      r.insulator == null ? null : num(r.insulator, '0.00'),
+      num(r.heading, '0.0'),
       r.angle == null ? null : num(r.angle, '0.0'),
       r.links,
     ]),
@@ -101,11 +107,26 @@ export async function exportScheduleXlsx() {
     [
       {
         data: towers, sheet: 'Tower Schedule', stickyRowsCount: 1,
-        columns: [{ width: 9 }, { width: 38 }, { width: 9 }, { width: 13 }, { width: 15 }, { width: 13 }, { width: 12 }, { width: 13 }, { width: 10 }, { width: 9 }, { width: 9 }, { width: 10 }, { width: 40 }],
+        columns: [{ width: 9 }, { width: 38 }, { width: 9 }, { width: 13 }, { width: 15 }, { width: 13 }, { width: 12 }, { width: 13 }, { width: 10 }, { width: 9 }, { width: 10 }, { width: 9 }, { width: 10 }, { width: 40 }],
       },
       { data: spans, sheet: 'Spans', stickyRowsCount: 1, columns: [{ width: 9 }, { width: 9 }, { width: 9 }, { width: 14 }, { width: 11 }] },
     ],
   ).toFile(`${safeName(project)} - Tower Schedule.xlsx`);
+}
+
+/** Download the current project's structures as Google Earth pins (.kmz). */
+export function exportKmz() {
+  const s = useStore.getState();
+  const project = s.projects.find((p) => p.id === s.projectId)?.name ?? 'Project';
+  const blob = buildKmz(project, s.structures, s.spans, s.env.exaggeration);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${safeName(project)}.kmz`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
 const f3 = (v: number) => v.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -147,6 +168,9 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
           <button className="primary" onClick={doExport} disabled={busy || rows.length === 0} title="Download as an Excel workbook (.xlsx)">
             {busy ? 'Exporting…' : 'Export to Excel'}
           </button>
+          <button className="primary earth" onClick={exportKmz} disabled={rows.length === 0} title="Download pins for every structure (and the lines) as a Google Earth .kmz">
+            Export to Google Earth
+          </button>
           <button className="x" onClick={onClose} title="Close">×</button>
         </div>
       </div>
@@ -159,7 +183,7 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
             <thead>
               <tr>
                 <th>No.</th><th>Type</th><th>Voltage</th><th>Zone</th><th className="r">Northing (m)</th><th className="r">Easting (m)</th>
-                <th className="r">Elev. (m)</th><th className="r">Height (m)</th><th className="r">Heading</th><th className="r">Angle</th><th>Connected to</th>
+                <th className="r">Elev. (m)</th><th className="r">Height (m)</th><th className="r">Insulator (m)</th><th className="r">Heading</th><th className="r">Angle</th><th>Connected to</th>
               </tr>
             </thead>
             <tbody>
@@ -173,6 +197,7 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
                   <td className="r">{f3(r.easting)}</td>
                   <td className="r">{r.elev.toFixed(0)}</td>
                   <td className="r">{r.height.toFixed(1)}</td>
+                  <td className="r">{r.insulator == null ? '—' : r.insulator.toFixed(2)}</td>
                   <td className="r">{r.heading.toFixed(0)}°</td>
                   <td className="r">{r.angle == null ? '—' : `${r.angle.toFixed(1)}°`}</td>
                   <td className="links">{r.links}</td>

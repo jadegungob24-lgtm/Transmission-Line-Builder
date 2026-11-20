@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getModel } from '../catalog/structures';
+import { modelOf } from '../catalog/structures';
 import { VOLTAGES } from '../catalog/voltages';
 import { enuOffset, LL } from '../core/geo';
 import type { Span, Structure } from '../core/types';
@@ -53,7 +53,7 @@ const centroid = (pts: THREE.Vector3[]) =>
 
 /** Attachment points of one end, in that structure's own ENU frame. */
 export function endAttachments(S: Structure, towards: LL, slots: number[]) {
-  const m = getModel(S.defId, S.voltage);
+  const m = modelOf(S);
   let flip = 1;
   if (m.strain) {
     const [e, n] = enuOffset(S, towards);

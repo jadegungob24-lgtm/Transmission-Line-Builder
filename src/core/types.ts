@@ -15,6 +15,8 @@ export interface Structure {
   builtAt: number;
   /** Structure number in its project (T-001, T-002 …), in the order it was plotted. */
   no?: number;
+  /** Insulator string length (m); omitted = the standard length for the voltage class. */
+  insLen?: number;
 }
 
 export interface ProjectMeta {

@@ -5,6 +5,7 @@ import { bearingDeg, distanceM, enuOffset, inPhilippines, LL, offsetLL } from '.
 import { checkLink, useHud, useStore } from '../core/store';
 import type { Span, Structure } from '../core/types';
 import { neighbours } from '../network/connectivity';
+import { runtime } from './runtime';
 import { GhostState, SceneLayer } from './sceneLayer';
 
 // Turns mouse and keyboard input into construction actions, and keeps the
@@ -125,6 +126,54 @@ export class Controller {
     return null;
   }
 
+  /** Validity of an existing structure at a new position (site + its spans' lengths). */
+  private moveProblem(moved: Structure): string | null {
+    const prob = this.siteProblem(moved);
+    if (prob) return prob;
+    const { structures, spans } = useStore.getState();
+    for (const nb of neighbours(moved.id, spans)) {
+      const other = structures[nb.other];
+      if (!other) continue;
+      const V = VOLTAGES[nb.span.voltage];
+      const max = V.maxSpan * Math.min(DEF_BY_ID[moved.defId].spanFactor, DEF_BY_ID[other.defId].spanFactor);
+      const d = distanceM(moved, other);
+      if (d > max) return `Span too long: ${d.toFixed(0)} m (max ${max.toFixed(0)} m)`;
+    }
+    return null;
+  }
+
+  /**
+   * Move a structure to typed-in coordinates. If the spot is off screen the camera
+   * goes there first, so the terrain under it is loaded before the elevation is read.
+   * Resolves to an error message, or null once the structure has moved.
+   */
+  async relocate(id: string, p: LL): Promise<string | null> {
+    if (!inPhilippines(p.lng, p.lat)) return 'Outside Philippine territory';
+    const map = this.map;
+    const back = { center: map.getCenter(), zoom: map.getZoom() };
+    let flew = false;
+    if (!map.getBounds().contains([p.lng, p.lat]) || map.getZoom() < 13) {
+      flew = true;
+      runtime.nav?.interrupt();
+      await new Promise<void>((done) => {
+        map.once('moveend', () => (map.areTilesLoaded() ? done() : map.once('idle', () => done())));
+        map.easeTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 15), duration: 900 });
+      });
+    }
+    const st = useStore.getState().structures[id];
+    if (!st) return 'Structure no longer exists';
+    const moved = { ...st, lng: p.lng, lat: p.lat, elev: this.elev(p) };
+    const prob = this.moveProblem(moved);
+    if (prob) {
+      // rejected: take the camera back to where the structure still is
+      if (flew) map.easeTo({ ...back, duration: 900 });
+      return prob;
+    }
+    useStore.getState().patchStructure(id, { lng: p.lng, lat: p.lat, elev: moved.elev }, true);
+    this.refresh();
+    return null;
+  }
+
   private ghostSpan(A: Structure, B: Structure, extra?: Record<string, Span>) {
     const s = useStore.getState();
     const spans = extra ? { ...s.spans, ...extra } : s.spans;
@@ -215,17 +264,7 @@ export class Controller {
           const st = s.structures[s.movingId];
           if (!st) return;
           s.patchStructure(st.id, { lng: p.lng, lat: p.lat, elev: this.elev(p) }, true);
-          const moved = useStore.getState().structures[st.id];
-          let prob = this.siteProblem(moved);
-          if (!prob) {
-            for (const nb of neighbours(st.id, useStore.getState().spans)) {
-              const other = useStore.getState().structures[nb.other];
-              const V = VOLTAGES[nb.span.voltage];
-              const max = V.maxSpan * Math.min(DEF_BY_ID[moved.defId].spanFactor, DEF_BY_ID[other.defId].spanFactor);
-              const d = distanceM(moved, other);
-              if (d > max) prob = `Span too long: ${d.toFixed(0)} m (max ${max.toFixed(0)} m)`;
-            }
-          }
+          const prob = this.moveProblem(useStore.getState().structures[st.id]);
           this.layer.setHighlight({ kind: 'structure', id: st.id, mode: prob ? 'delete' : 'hover' });
           this.msg(prob ?? 'Click to drop · T rotate · right-click to cancel', !prob);
         } else {

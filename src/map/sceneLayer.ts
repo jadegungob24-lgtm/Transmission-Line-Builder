@@ -87,6 +87,9 @@ export class SceneLayer implements CustomLayerInterface {
   private tmpV = new THREE.Vector3();
   private demolitions = new Demolitions(this.scene);
   private last = performance.now();
+  private lastMove = 0;
+  private shadowDirty = true;
+  private shadowsWereOn = false;
   private frames = 0;
   private fpsT = performance.now();
   onFps?: (fps: number) => void;
@@ -180,11 +183,18 @@ export class SceneLayer implements CustomLayerInterface {
   // ------------------------------------------------------------------ frames & coords
 
   private setOrigin(o: LL) {
+    const prev = this.origin;
+    const prevS0 = this.s0;
     this.origin = o;
     this.s0 = mercScale(o.lat);
     for (const s of this.structs.values()) this.placeMesh(s.mesh, s.st, s.glow);
     for (const w of this.wires.values()) this.placeWire(w.mesh, w.A);
-    this.catcherAt = null;
+    // carry the shadow catcher over to the new frame instead of rebuilding it mid-pan
+    const r = prevS0 / this.s0;
+    this.catcher.scale.multiplyScalar(r);
+    this.catcher.position.multiplyScalar(r).add(this.worldOf(prev));
+    this.shadowsWereOn = false; // re-aim the shadow camera
+    this.shadowDirty = true;
   }
 
   worldOf(p: { lng: number; lat: number }, z = 0, out = new THREE.Vector3()) {
@@ -230,6 +240,7 @@ export class SceneLayer implements CustomLayerInterface {
   // ------------------------------------------------------------------ sync with store
 
   private sync() {
+    this.shadowDirty = true;
     const { structures, spans, network, selected } = useStore.getState();
     const hl = this.highlight;
     const hlFor = (kind: 'structure' | 'span', id: string) => {
@@ -441,11 +452,17 @@ export class SceneLayer implements CustomLayerInterface {
 
   // ------------------------------------------------------------------ shadows
 
-  private updateCatcher(R: number) {
+  /**
+   * Rebuild the terrain-draped shadow catcher when the view has drifted away from it.
+   * This samples the terrain ~2,400 times (~200 ms), so it only runs once the camera
+   * has settled; while moving, the previous catcher and shadow map are reused.
+   * Returns true if it was rebuilt.
+   */
+  private updateCatcher(R: number, settled: boolean): boolean {
     const c = this.map.getCenter();
     const now = performance.now();
     const at = this.catcherAt;
-    if (at && distanceM(at, c) < R * 0.2 && Math.abs(at.R - R) / R < 0.3 && now - at.t < 2500) return;
+    if (at && (!settled || (distanceM(at, c) < R * 0.2 && Math.abs(at.R - R) / R < 0.3 && now - at.t < 2500))) return false;
     const N = 48;
     const g = new THREE.PlaneGeometry(2 * R, 2 * R, N, N);
     const pos = g.attributes.position as THREE.BufferAttribute;
@@ -464,7 +481,10 @@ export class SceneLayer implements CustomLayerInterface {
     g.computeVertexNormals();
     this.catcher.geometry.dispose();
     this.catcher.geometry = g;
+    this.catcher.position.set(0, 0, 0);
+    this.catcher.scale.set(1, 1, 1);
     this.catcherAt = { lng: c.lng, lat: c.lat, R, t: now };
+    return true;
   }
 
   // ------------------------------------------------------------------ render
@@ -526,20 +546,29 @@ export class SceneLayer implements CustomLayerInterface {
     const centerW = this.worldOf(center);
     const shadowsOn = env.shadows && show3D && zoom >= 13 && !env.rain;
     this.renderer.shadowMap.enabled = shadowsOn;
+    this.renderer.shadowMap.autoUpdate = false;
     this.catcher.visible = shadowsOn;
     this.sun.castShadow = shadowsOn;
+    if (map.isMoving()) this.lastMove = now;
     if (shadowsOn) {
-      const R = Math.min(5000, Math.max(250, mpp * 900));
-      this.updateCatcher(R);
-      const sc = this.sun.shadow.camera;
-      sc.left = sc.bottom = -R;
-      sc.right = sc.top = R;
-      sc.near = 1;
-      sc.far = R * 6;
-      sc.updateProjectionMatrix();
-      this.sun.target.position.copy(centerW);
-      this.sun.position.copy(centerW).addScaledVector(sun.dir, R * 3);
-      this.sun.target.updateMatrixWorld();
+      // The shadow camera stays fixed on the catcher while the camera moves, so the
+      // shadow map stays valid and is only re-rendered when something changes.
+      const settled = now - this.lastMove > 250;
+      if (this.updateCatcher(Math.min(5000, Math.max(250, mpp * 900)), settled) || !this.shadowsWereOn) {
+        const at = this.catcherAt!;
+        const R = at.R;
+        const cw = this.worldOf(at);
+        const sc = this.sun.shadow.camera;
+        sc.left = sc.bottom = -R;
+        sc.right = sc.top = R;
+        sc.near = 1;
+        sc.far = R * 6;
+        sc.updateProjectionMatrix();
+        this.sun.target.position.copy(cw);
+        this.sun.position.copy(cw).addScaledVector(sun.dir, R * 3);
+        this.sun.target.updateMatrixWorld();
+        this.shadowDirty = true;
+      }
     } else {
       this.sun.position.copy(centerW).addScaledVector(sun.dir, 1000);
       this.sun.target.position.copy(centerW);
@@ -599,6 +628,11 @@ export class SceneLayer implements CustomLayerInterface {
       u.uCol.value.setRGB(1, 1, 1).lerp(new THREE.Color(0x9aa3ad), env.rain ? 0.5 : 0);
       u.uOff.value.set(((mercX(this.origin.lng) / this.s0) % 90000), ((-mercY(this.origin.lat) / this.s0) % 90000));
     }
+
+    // re-render the shadow map only when shadow casters or the shadow camera changed
+    this.renderer.shadowMap.needsUpdate = shadowsOn && (this.shadowDirty || animating);
+    this.shadowDirty = false;
+    this.shadowsWereOn = shadowsOn;
 
     this.renderer.resetState();
     this.renderer.setViewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);

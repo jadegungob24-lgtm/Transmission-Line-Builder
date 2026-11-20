@@ -4,7 +4,7 @@ import { VOLTAGES, VoltageId } from '../catalog/voltages';
 import { layoutSpan, wireHeightAt } from '../conductors/spanWires';
 import { makeCatenary, wireLength } from '../conductors/catenary';
 import { bearingDeg } from '../core/geo';
-import { formatPrs92, toPrs92 } from '../core/prs92';
+import { formatPrs92, fromPrs92, PTM_ZONES, toPrs92 } from '../core/prs92';
 import { useHud, useStore } from '../core/store';
 import { lineAngle, neighbours } from '../network/connectivity';
 import { SUN } from '../map/environment';
@@ -98,12 +98,16 @@ export function InfoPanel() {
   const structures = useStore((s) => s.structures);
   const spans = useStore((s) => s.spans);
   const net = useStore((s) => s.network);
+  const movingId = useStore((s) => s.movingId);
   const set = useStore((s) => s.set);
-  if (!selected) return <NetworkPanel />;
+  // While a structure is being moved its panel stays open, so the coordinates update live.
+  const structId = movingId ?? (selected?.kind === 'structure' ? selected.id : null);
+  if (!structId && !selected) return <NetworkPanel />;
 
-  if (selected.kind === 'structure') {
-    const st = structures[selected.id];
+  if (structId) {
+    const st = structures[structId];
     if (!st) return null;
+    const moving = movingId === st.id;
     const def = DEF_BY_ID[st.defId];
     const m = getModel(st.defId, st.voltage);
     const nb = neighbours(st.id, spans);
@@ -114,8 +118,9 @@ export function InfoPanel() {
       <div className="info panel">
         <div className="info-head">
           <b>{def.name}</b>
-          <button className="x" onClick={() => set({ selected: null })}>×</button>
+          <button className="x" onClick={() => (moving ? runtime.ctrl?.cancel() : set({ selected: null }))} title={moving ? 'Cancel move' : 'Close'}>×</button>
         </div>
+        {moving && <p className="moving-note small">Moving · click the map to drop · right-click to cancel</p>}
         <Row k="Status" v={net.energizedStructures.has(st.id) ? <span className="ok">● Energised</span> : <span className="muted">○ De-energised</span>} />
         {def.voltages !== 'any' && <Row k="Voltage class" v={<span style={{ color: VOLTAGES[st.voltage].color }}>{VOLTAGES[st.voltage].label}</span>} />}
         <Row k="Circuits" v={def.role === 'line' ? `${def.circuits}` : `${m.circuits.length} line bays`} />
@@ -127,20 +132,26 @@ export function InfoPanel() {
         {warn != null && <p className="bad small">Deflection exceeds the {def.maxAngle}° limit for this structure. Use an angle or dead-end tower here.</p>}
         {def.capacityMW && <Row k="Capacity" v={`${def.capacityMW} MW`} />}
         {def.loadMW && <Row k="Load" v={`${def.loadMW} MW`} />}
-        <Coordinates lng={st.lng} lat={st.lat} />
+        <Coordinates key={st.id} id={st.id} lng={st.lng} lat={st.lat} editable={!moving} />
         <div className="info-actions">
           <button onClick={() => runtime.ctrl?.rotate(-15)}>⟲ 15°</button>
           <button onClick={() => runtime.ctrl?.rotate(15)}>⟳ 15°</button>
-          {st.manualRot && <button onClick={() => useStore.getState().patchStructure(st.id, { manualRot: false }, true)}>Auto-orient</button>}
-          <button onClick={() => { const s = useStore.getState(); s.setTool('move'); s.set({ movingId: st.id, moveOrigin: { lng: st.lng, lat: st.lat, rotation: st.rotation } }); }}>Move</button>
-          <button onClick={() => { const s = useStore.getState(); s.setTool(def.role === 'line' ? 'build' : 'connect', def.role === 'line' ? def.id : null); s.set({ chainFrom: st.id }); }}>Extend</button>
-          <button className="danger" onClick={() => useStore.getState().removeStructure(st.id)}>Demolish</button>
+          {moving ? (
+            <button onClick={() => runtime.ctrl?.cancel()}>Cancel move</button>
+          ) : (
+            <>
+              {st.manualRot && <button onClick={() => useStore.getState().patchStructure(st.id, { manualRot: false }, true)}>Auto-orient</button>}
+              <button onClick={() => { const s = useStore.getState(); s.setTool('move'); s.set({ movingId: st.id, moveOrigin: { lng: st.lng, lat: st.lat, rotation: st.rotation } }); }}>Move</button>
+              <button onClick={() => { const s = useStore.getState(); s.setTool(def.role === 'line' ? 'build' : 'connect', def.role === 'line' ? def.id : null); s.set({ chainFrom: st.id }); }}>Extend</button>
+              <button className="danger" onClick={() => useStore.getState().removeStructure(st.id)}>Demolish</button>
+            </>
+          )}
         </div>
       </div>
     );
   }
 
-  const sp = spans[selected.id];
+  const sp = selected ? spans[selected.id] : null;
   if (!sp) return null;
   return <SpanInfo id={sp.id} />;
 }
@@ -237,20 +248,73 @@ function NetworkPanel() {
   );
 }
 
-function Coordinates({ lng, lat }: { lng: number; lat: number }) {
+/** PRS92 coordinates of a structure. Click to type new ones and move the structure there. */
+function Coordinates({ id, lng, lat, editable }: { id: string; lng: number; lat: number; editable: boolean }) {
   const [copied, setCopied] = useState(false);
-  const c = formatPrs92(toPrs92(lng, lat));
+  const [edit, setEdit] = useState<{ zone: number; n: string; e: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const raw = toPrs92(lng, lat);
+  const c = formatPrs92(raw);
+
   const copy = () => {
     navigator.clipboard?.writeText(`${c.zone}\n${c.northing}\n${c.easting}`).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     }, () => {});
   };
+  const open = () => {
+    if (!editable) return;
+    setErr(null);
+    setEdit({ zone: raw.zone.zone, n: raw.northing.toFixed(3), e: raw.easting.toFixed(3) });
+  };
+  const apply = async () => {
+    if (!edit || busy) return;
+    const n = parseFloat(edit.n.replace(/[,\s]/g, ''));
+    const e = parseFloat(edit.e.replace(/[,\s]/g, ''));
+    if (!isFinite(n) || !isFinite(e)) return setErr('Enter numbers for northing and easting');
+    if (e < 100000 || e > 900000 || n < 400000 || n > 2400000) return setErr('Those values are outside the PTM zone range');
+    const p = fromPrs92(edit.zone, n, e);
+    setBusy(true);
+    setErr(null);
+    const problem = runtime.ctrl ? await runtime.ctrl.relocate(id, p) : 'Map not ready';
+    setBusy(false);
+    if (problem) setErr(problem);
+    else setEdit(null);
+  };
+
+  if (edit) {
+    const onKey = (ev: React.KeyboardEvent) => {
+      if (ev.key === 'Enter') apply();
+      if (ev.key === 'Escape') setEdit(null);
+    };
+    return (
+      <div className="coord-edit">
+        <div className="row">
+          <span className="muted">Coordinates</span>
+          <select value={edit.zone} onChange={(ev) => setEdit({ ...edit, zone: +ev.target.value })} onKeyDown={onKey}>
+            {PTM_ZONES.map((z) => <option key={z.zone} value={z.zone}>PRS92 · PTM Zone {z.roman}</option>)}
+          </select>
+        </div>
+        <label>N <input autoFocus inputMode="decimal" value={edit.n} onChange={(ev) => setEdit({ ...edit, n: ev.target.value })} onKeyDown={onKey} /> m</label>
+        <label>E <input inputMode="decimal" value={edit.e} onChange={(ev) => setEdit({ ...edit, e: ev.target.value })} onKeyDown={onKey} /> m</label>
+        {err && <p className="bad small">{err}</p>}
+        <div className="info-actions">
+          <button className="primary" onClick={apply} disabled={busy}>{busy ? 'Moving…' : 'Move here'}</button>
+          <button onClick={() => setEdit(null)} disabled={busy}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="row coords-row">
-      <span className="muted">Coordinates</span>
-      <button className="coord" onClick={copy} title="Click to copy">
-        <span className="coord-zone">{copied ? 'Copied ✓' : c.zone}</span>
+      <span className="muted">
+        Coordinates
+        <button className="coord-copy" onClick={copy} title="Copy coordinates">{copied ? '✓' : '⧉'}</button>
+      </span>
+      <button className={`coord${editable ? ' editable' : ''}`} onClick={open} title={editable ? 'Click to type new coordinates' : 'Updating live while moving'}>
+        <span className="coord-zone">{c.zone}</span>
         <span>{c.northing}</span>
         <span>{c.easting}</span>
       </button>

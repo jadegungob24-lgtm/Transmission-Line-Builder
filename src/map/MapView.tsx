@@ -208,6 +208,7 @@ export function MapView() {
 
     return () => {
       unsub();
+      window.clearTimeout(ovTimer);
       cancelAnimationFrame(camRaf);
       nav?.dispose();
       ctrl?.dispose();

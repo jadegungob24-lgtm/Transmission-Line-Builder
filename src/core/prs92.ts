@@ -46,6 +46,12 @@ export function toPrs92(lng: number, lat: number): Prs92Coord {
   return { zone, northing, easting };
 }
 
+/** PRS92 PTM northing/easting in the given zone (1–5) → WGS 84 lng/lat. */
+export function fromPrs92(zone: number, northing: number, easting: number): { lng: number; lat: number } {
+  const [lng, lat] = converters[Math.max(1, Math.min(5, zone)) - 1].inverse([easting, northing]);
+  return { lng, lat };
+}
+
 const fmt = (v: number) => v.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
 export function formatPrs92(c: Prs92Coord) {

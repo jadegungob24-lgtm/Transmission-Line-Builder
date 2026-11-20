@@ -51,7 +51,7 @@ export default function App() {
     const down = (e: KeyboardEvent) => {
       shift = e.shiftKey;
       const tag = (e.target as HTMLElement).tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       const k = e.key.toLowerCase();
       const s = useStore.getState();
 

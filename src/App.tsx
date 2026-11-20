@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { TRANSMISSION_VOLTAGES } from './catalog/voltages';
 import { useStore } from './core/store';
 import { MapView } from './map/MapView';
-import { northUp, resetTilt } from './map/navigation';
+import { northUp, resetTilt, resetView } from './map/navigation';
 import { runtime, setView } from './map/runtime';
 import { NavWidget } from './ui/NavWidget';
 import { Hud, InfoPanel, Rain, Settings, SideTools, TopBar, Welcome } from './ui/Panels';
@@ -69,7 +69,8 @@ export default function App() {
       const map = runtime.map;
       switch (k) {
         case 'escape': runtime.ctrl?.cancel(); break;
-        case 'r': runtime.ctrl?.rotate(e.shiftKey ? -15 : 15); break;
+        case 'r': if (map) resetView(map); break;
+        case 't': runtime.ctrl?.rotate(e.shiftKey ? -15 : 15); break;
         case 'v': s.setTool('select'); break;
         case 'm': s.setTool('move'); break;
         case 'x': s.setTool('bulldoze'); break;

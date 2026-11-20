@@ -126,7 +126,8 @@ export function MapView() {
       minZoom: 4.5,
       maxZoom: 18.5,
       maxPitch: 85,
-      pitch: 30,
+      pitch: 0,
+      bearing: 0,
       attributionControl: { compact: true },
       canvasContextAttributes: { antialias: true },
     });

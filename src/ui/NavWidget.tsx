@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useHud } from '../core/store';
-import { flyHome, northUp, toggle3D } from '../map/navigation';
+import { flyHome, northUp, resetView, toggle3D } from '../map/navigation';
 import { runtime } from '../map/runtime';
 
 // Google Earth–style camera control: a compass ring you can drag to rotate the
@@ -74,6 +74,13 @@ export function NavWidget() {
       <div className="navw-col panel">
         <button onClick={() => runtime.map && toggle3D(runtime.map)} title={is3D ? 'Switch to 2D (flat) view (U)' : 'Switch to 3D (tilted) view'}>
           <b>{is3D ? '3D' : '2D'}</b>
+        </button>
+        <button onClick={() => runtime.map && resetView(runtime.map)} title="Reset view: face north and look straight down here (R)">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4.5 12 A7.5 7.5 0 1 0 7 6.4" />
+            <path d="M3.5 4.5 L7 6.4 L5.6 10" />
+            <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+          </svg>
         </button>
         <span className="sep" />
         <button onClick={() => zoom(1)} title="Zoom in (+ / Page Up)">＋</button>

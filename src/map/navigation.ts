@@ -122,6 +122,17 @@ export class Navigation {
 
 // ------------------------------------------------------------------ camera helpers
 
+/** The default view: facing north and looking straight down. */
+export const DEFAULT_VIEW = { bearing: 0, pitch: 0 };
+
+/**
+ * Return to the default view (north-up, top-down) over the spot currently in
+ * the middle of the screen, keeping the zoom level. Bound to R.
+ */
+export function resetView(map: MLMap) {
+  map.easeTo({ ...DEFAULT_VIEW, duration: 700, essential: true });
+}
+
 export function northUp(map: MLMap) {
   map.easeTo({ bearing: 0, duration: 600 });
 }
@@ -136,13 +147,13 @@ export function toggle3D(map: MLMap) {
 
 export function flyHome(map: MLMap) {
   const cam = map.cameraForBounds(PH_VIEW_BOUNDS, { padding: 40 });
-  map.flyTo({ ...cam, bearing: 0, pitch: 30, duration: 2500, essential: true });
+  map.flyTo({ ...cam, ...DEFAULT_VIEW, duration: 2500, essential: true });
 }
 
 export function flyToBounds(map: MLMap, west: number, south: number, east: number, north: number) {
-  const cam = map.cameraForBounds([[west, south], [east, north]], { padding: 90, maxZoom: 16 });
+  const cam = map.cameraForBounds([[west, south], [east, north]], { padding: 90, maxZoom: 16, bearing: 0 });
   if (!cam) return;
-  map.flyTo({ ...cam, bearing: map.getBearing(), pitch: 55, duration: 2600, essential: true });
+  map.flyTo({ ...cam, ...DEFAULT_VIEW, duration: 2600, essential: true });
 }
 
 /** Approximate camera height above sea level, like Google Earth's "eye altitude". */

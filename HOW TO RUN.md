@@ -127,6 +127,7 @@ The camera works like **Google Earth**, with a few extra city-builder shortcuts.
 | Zoom with keys | **+ / −** or **Page Up / Page Down** (hold) |
 | Zoom in on a point | **Double-click** (Select tool) |
 | Fly to a structure | **Double-click** it (Select tool) |
+| **Reset view** (face north, look straight down at the spot you're exploring) | **R**, or the **⟲** button (bottom right) |
 | Face north | **N**, or click the **compass** |
 | Look straight down | **U**, or click **3D** to switch to **2D** |
 | Rotate freely | **Drag the compass ring** |
@@ -140,7 +141,7 @@ The camera works like **Google Earth**, with a few extra city-builder shortcuts.
 |---|---|
 | Place / select | **Left-click** |
 | Cancel / end the current line | **Right-click** or **Esc** |
-| Rotate the structure being placed | **R** (clockwise) / **Shift + R** |
+| Rotate the structure being placed | **T** (clockwise) / **Shift + T** |
 | Select, move, bulldoze tools | **V / M / X** |
 | String conductors between existing structures | **C** |
 | Construction menus | **F1 – F5** |

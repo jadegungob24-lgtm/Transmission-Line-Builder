@@ -83,7 +83,7 @@ double-click fly-to, keyboard flight, and an eye-altitude status bar with a scal
 **Phase 2 — placement:** 12 structure types: DC/SC suspension, angle, DC/SC
 dead-end, special crossing (aviation-banded), steel poles SC/DC, a 13.8 kV
 distribution pole, a substation, a thermal plant and a solar farm. Each has a
-ghost preview that turns green or red with a reason, R to rotate, and checks for
+ghost preview that turns green or red with a reason, T to rotate, and checks for
 territory, water and spacing. You can move a structure (wires update live) and
 bulldoze it.
 

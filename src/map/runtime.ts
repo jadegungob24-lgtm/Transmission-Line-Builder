@@ -19,5 +19,5 @@ export function setView(mode: ViewMode) {
 }
 
 export function flyTo(lng: number, lat: number, zoom: number) {
-  runtime.map?.flyTo({ center: [lng, lat], zoom, pitch: 55, bearing: -20, duration: 2500, essential: true });
+  runtime.map?.flyTo({ center: [lng, lat], zoom, bearing: 0, pitch: 0, duration: 2500, essential: true });
 }

@@ -381,12 +381,12 @@ export function Welcome({ onClose }: { onClose: () => void }) {
           <div><kbd>Right-drag</kbd> / <kbd>Shift</kbd>/<kbd>Ctrl</kbd>+drag rotate &amp; tilt</div>
           <div><kbd>Right-click</kbd> / <kbd>Esc</kbd> cancel / end line</div>
           <div><kbd>Wheel</kbd> zoom to cursor · <kbd>Double-click</kbd> zoom in</div>
-          <div><kbd>R</kbd> / <kbd>Shift+R</kbd> rotate structure</div>
+          <div><kbd>T</kbd> / <kbd>Shift+T</kbd> rotate structure</div>
           <div><kbd>W A S D</kbd> / arrows pan · <kbd>Q E</kbd> orbit</div>
           <div><kbd>V M X</kbd> select · move · bulldoze</div>
           <div><kbd>Shift</kbd>+arrows rotate &amp; tilt · <kbd>+ −</kbd> zoom</div>
           <div><kbd>C</kbd> string conductors · <kbd>[ ]</kbd> voltage</div>
-          <div><kbd>N</kbd> face north · <kbd>U</kbd> look straight down</div>
+          <div><kbd>R</kbd> reset view · <kbd>N</kbd> north · <kbd>U</kbd> untilt</div>
           <div><kbd>F1–F5</kbd> construction menus</div>
           <div><kbd>1 2 3</kbd> top / isometric / ground view</div>
           <div><kbd>Delete</kbd> demolish selection</div>

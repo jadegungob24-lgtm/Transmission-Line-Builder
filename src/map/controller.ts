@@ -236,7 +236,7 @@ export class Controller {
             }
           }
           this.layer.setHighlight({ kind: 'structure', id: st.id, mode: prob ? 'delete' : 'hover' });
-          this.msg(prob ?? 'Click to drop · R rotate · right-click to cancel', !prob);
+          this.msg(prob ?? 'Click to drop · T rotate · right-click to cancel', !prob);
         } else {
           this.layer.setHighlight(hitSt ? { kind: 'structure', id: hitSt.id, mode: 'hover' } : null);
           this.msg(hitSt ? 'Click to pick up' : 'Move: click a structure to pick it up');
@@ -314,7 +314,7 @@ export class Controller {
             this.msg(`${def.short} · ${V.label} · span ${gs.chk.dist.toFixed(0)} m · click to place, right-click to end line`, true);
           }
         } else if (!prob) {
-          this.msg(`${def.short} · R to rotate · click to place`, true);
+          this.msg(`${def.short} · T to rotate · click to place`, true);
         }
         if (prob) this.msg(prob, false);
         this.layer.setGhost({ structures: [g], valid: [!prob], spans });

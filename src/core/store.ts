@@ -415,4 +415,4 @@ export interface Hud {
   ok: boolean;
   fps: number;
 }
-export const useHud = create<Hud>()(() => ({ lng: 0, lat: 0, elev: 0, zoom: 5, bearing: 0, pitch: 30, alt: 0, msg: '', ok: true, fps: 0 }));
+export const useHud = create<Hud>()(() => ({ lng: 0, lat: 0, elev: 0, zoom: 5, bearing: 0, pitch: 0, alt: 0, msg: '', ok: true, fps: 0 }));

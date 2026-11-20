@@ -17,6 +17,8 @@ export interface Structure {
   no?: number;
   /** Insulator string length (m); omitted = the standard length for the voltage class. */
   insLen?: number;
+  /** Name given by the user; omitted = the automatic number (T-001 …). */
+  name?: string;
 }
 
 export interface ProjectMeta {

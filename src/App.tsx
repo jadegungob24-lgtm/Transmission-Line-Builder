@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { TRANSMISSION_VOLTAGES } from './catalog/voltages';
-import { useStore } from './core/store';
+import { editDirty, useStore } from './core/store';
 import { MapView } from './map/MapView';
 import { northUp, resetTilt, resetView } from './map/navigation';
 import { runtime, setView } from './map/runtime';
@@ -95,6 +95,9 @@ export default function App() {
         case '1': setView('top'); break;
         case '2': setView('iso'); break;
         case '3': setView('ground'); break;
+        case 'enter':
+          if (editDirty(s) && !s.movingId) s.saveEdit();
+          break;
         case 'delete':
         case 'backspace':
           if (s.multi.length > 1) s.removeStructures(s.multi);

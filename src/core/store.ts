@@ -45,6 +45,15 @@ interface State {
   multi: string[];
   /** The line shown in the Plan & profile panel (any structure or span on it). */
   profileOf: Selection | null;
+  /**
+   * Info-panel edit of one structure: changes show live but stay unsaved until
+   * Save; Cancel, closing the panel or selecting something else puts back `base`.
+   */
+  edit: { id: string; base: Record<string, Structure> } | null;
+  saveEdit: () => void;
+  cancelEdit: () => void;
+  /** Rename right away (schedule table), outside any pending info-panel edit. */
+  renameStructure: (id: string, name: string) => void;
   movingId: string | null;
   moveOrigin: { lng: number; lat: number; rotation: number } | null;
   autoConnect: boolean;
@@ -218,7 +227,8 @@ function sanitize(d: any): NetData {
   const spans: Record<string, Span> = {};
   for (const s of Object.values<any>(d.structures)) {
     if (s && DEF_BY_ID[s.defId] && VOLTAGES[s.voltage as VoltageId] && isFinite(s.lng) && isFinite(s.lat))
-      structures[s.id] = { ...s, elev: s.elev ?? 0, builtAt: 0, insLen: typeof s.insLen === 'number' && s.insLen > 0 ? s.insLen : undefined };
+      structures[s.id] = { ...s, elev: s.elev ?? 0, builtAt: 0, insLen: typeof s.insLen === 'number' && s.insLen > 0 ? s.insLen : undefined,
+        name: typeof s.name === 'string' && s.name.trim() ? s.name.trim().slice(0, MAX_NAME) : undefined };
   }
   // number any structures saved before numbering existed, in their saved order
   let next = nextNo(structures);
@@ -236,11 +246,58 @@ function nextNo(structures: Record<string, Structure>): number {
   return max + 1;
 }
 
-/** "T-007" for line structures, "SS-002" for stations etc. Numbering is shared across the project. */
-export function structureTag(st: Structure): string {
+/** The automatic number: "T-007" for line structures, "SS-002" for stations etc. */
+export function autoTag(st: Structure): string {
   const role = DEF_BY_ID[st.defId]?.role;
   const p = role === 'substation' ? 'SS' : role === 'source' ? 'PP' : 'T';
   return `${p}-${String(st.no ?? 0).padStart(3, '0')}`;
+}
+
+/** The structure's name: the one you gave it, or its automatic number. */
+export function structureTag(st: Structure): string {
+  return st.name?.trim() || autoTag(st);
+}
+
+export const MAX_NAME = 40;
+
+/** Names must be unique within the project (they label pins, exports and drawings). */
+export function nameProblem(id: string, name: string): string | null {
+  const v = name.trim();
+  if (!v) return null;
+  const clash = Object.values(useStore.getState().structures).find((o) => o.id !== id && structureTag(o).toLowerCase() === v.toLowerCase());
+  return clash ? `"${v}" is already used${clash.name ? ` by ${autoTag(clash)}` : ''}; names must be unique` : null;
+}
+
+/** Fields an info-panel edit can change; Cancel puts these back. */
+const EDIT_FIELDS = ['lng', 'lat', 'elev', 'rotation', 'manualRot', 'insLen', 'name'] as const;
+const DIRTY_FIELDS = ['lng', 'lat', 'rotation', 'manualRot', 'insLen', 'name'] as const;
+
+function changedIds(base: Record<string, Structure>, now: Record<string, Structure>): string[] {
+  if (base === now) return [];
+  const out: string[] = [];
+  for (const [id, b] of Object.entries(base)) {
+    const c = now[id];
+    if (c && c !== b && DIRTY_FIELDS.some((f) => (c[f] ?? null) !== (b[f] ?? null))) out.push(id);
+  }
+  return out;
+}
+
+/** The structures as they were before the current (unsaved) info-panel edit. */
+function committed(s: { structures: Record<string, Structure>; edit: { base: Record<string, Structure> } | null }) {
+  if (!s.edit) return s.structures;
+  const ids = changedIds(s.edit.base, s.structures);
+  if (!ids.length) return s.structures;
+  const out = { ...s.structures };
+  for (const id of ids) {
+    const b = s.edit.base[id];
+    out[id] = { ...out[id], ...Object.fromEntries(EDIT_FIELDS.map((f) => [f, b[f]])) };
+  }
+  return out;
+}
+
+/** True when the structure being edited in the info panel has unsaved changes. */
+export function editDirty(s: { structures: Record<string, Structure>; edit: { base: Record<string, Structure> } | null }) {
+  return !!s.edit && changedIds(s.edit.base, s.structures).length > 0;
 }
 
 const boot = loadProjects();
@@ -258,6 +315,31 @@ export const useStore = create<State>()((set, get) => ({
   selected: null,
   multi: [],
   profileOf: null,
+  edit: null,
+  saveEdit: () => {
+    const s = get();
+    if (s.edit) set({ edit: { id: s.edit.id, base: s.structures }, alignUndo: null });
+  },
+  cancelEdit: () => {
+    const s = get();
+    if (!s.edit) return;
+    const structures = committed(s);
+    const moving = s.movingId === s.edit.id;
+    set({
+      structures, network: structures === s.structures ? s.network : computeNetwork(structures, s.spans),
+      edit: { id: s.edit.id, base: structures }, alignUndo: null,
+      ...(moving ? { movingId: null, moveOrigin: null, tool: 'select' as Tool, selected: { kind: 'structure' as const, id: s.edit.id } } : {}),
+    });
+  },
+  renameStructure: (id, name) => {
+    const s = get();
+    const st = s.structures[id];
+    if (!st) return;
+    const v = name.trim().slice(0, MAX_NAME) || undefined;
+    const structures = { ...s.structures, [id]: { ...st, name: v } };
+    const edit = s.edit && s.edit.base[id] ? { id: s.edit.id, base: { ...s.edit.base, [id]: { ...s.edit.base[id], name: v } } } : s.edit;
+    set({ structures, edit });
+  },
   movingId: null,
   moveOrigin: null,
   autoConnect: true,
@@ -560,7 +642,8 @@ function saveNow() {
   window.clearTimeout(saveTimer);
   saveTimer = undefined;
   const s = useStore.getState();
-  writeJson(projectKey(s.projectId), { version: 1, structures: s.structures, spans: s.spans });
+  // unsaved info-panel edits are not written: closing the app discards them too
+  writeJson(projectKey(s.projectId), { version: 1, structures: committed(s), spans: s.spans });
   const projects = s.projects.map((p) => (p.id === s.projectId ? { ...p, updated: Date.now() } : p));
   useStore.setState({ projects });
   writeJson(PROJECTS_KEY, { current: s.projectId, list: projects });
@@ -577,7 +660,7 @@ function switchTo(id: string, projects: ProjectMeta[], data: NetData) {
   switching = true;
   useStore.setState({
     projects, projectId: id, ...data, network: computeNetwork(data.structures, data.spans),
-    selected: null, multi: [], profileOf: null, chainFrom: null, movingId: null, moveOrigin: null, tool: 'select', buildDefId: null, ghostRot: null, alignUndo: null,
+    selected: null, multi: [], profileOf: null, edit: null, chainFrom: null, movingId: null, moveOrigin: null, tool: 'select', buildDefId: null, ghostRot: null, alignUndo: null,
   });
   switching = false;
   writeJson(PROJECTS_KEY, { current: id, list: projects });
@@ -586,6 +669,23 @@ let switching = false;
 
 // A plain selection change (click, Esc, inspecting a span…) ends a multi-selection;
 // toggleMulti changes both together, so it is left alone.
+// Info-panel edit sessions follow the structure on show: one starts when a single
+// structure is selected, and ends (discarding unsaved changes) when the panel goes
+// away: closed, Esc, another selection, a multi-selection or a project switch.
+useStore.subscribe((s, p) => {
+  if (s.selected === p.selected && s.movingId === p.movingId && s.multi === p.multi && s.edit === p.edit) return;
+  const shown = s.movingId ?? (s.selected?.kind === 'structure' && s.multi.length < 2 ? s.selected.id : null);
+  if (s.edit && s.edit.id !== shown) {
+    const restored = committed(s);
+    useStore.setState({
+      edit: null, alignUndo: null,
+      ...(restored !== s.structures ? { structures: restored, network: computeNetwork(restored, s.spans) } : {}),
+    });
+  }
+  const cur = useStore.getState();
+  if (shown && !cur.edit && cur.structures[shown]) useStore.setState({ edit: { id: shown, base: cur.structures } });
+});
+
 useStore.subscribe((s, p) => {
   if (s.selected !== p.selected && s.multi === p.multi && s.multi.length) useStore.setState({ multi: [] });
   if (s.structures !== p.structures && s.multi.some((id) => !s.structures[id])) useStore.setState({ multi: s.multi.filter((id) => s.structures[id]) });

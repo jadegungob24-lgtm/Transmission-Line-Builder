@@ -5,7 +5,7 @@ import { VOLTAGES } from '../catalog/voltages';
 import { bearingDeg, distanceM } from '../core/geo';
 import { buildKmz } from '../core/kmz';
 import { toPrs92 } from '../core/prs92';
-import { structureTag, useStore } from '../core/store';
+import { autoTag, MAX_NAME, nameProblem, structureTag, useStore } from '../core/store';
 import type { Span, Structure } from '../core/types';
 import { lineAngle, neighbours } from '../network/connectivity';
 import { runtime } from '../map/runtime';
@@ -142,6 +142,16 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
   const rows = useMemo(() => scheduleRows(structures, spans, ex), [structures, spans, ex]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const [nameErr, setNameErr] = useState<string | null>(null);
+  const saveName = () => {
+    if (!renaming) return;
+    const problem = nameProblem(renaming.id, renaming.name);
+    if (problem) return setNameErr(problem);
+    useStore.getState().renameStructure(renaming.id, renaming.name);
+    setNameErr(null);
+    setRenaming(null);
+  };
 
   const focus = (r: ScheduleRow, e: React.MouseEvent) => {
     if (e.ctrlKey || e.metaKey) return useStore.getState().toggleMulti(r.id);
@@ -177,6 +187,7 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
       {err && <p className="bad small">{err}</p>}
+      {nameErr && <p className="bad small">{nameErr}</p>}
       {rows.length === 0 ? (
         <p className="muted small">No structures yet. Every tower, pole and station you plot is listed here with its PRS92 coordinates.</p>
       ) : (
@@ -191,7 +202,26 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className={r.id === activeId ? 'on' : multi.includes(r.id) ? 'multi' : ''} onClick={(e) => focus(r, e)} title="Click to select and fly to it · Ctrl+click to select several">
-                  <td><b>{r.tag}</b></td>
+                  <td className="name-cell" onClick={(e) => renaming?.id === r.id && e.stopPropagation()}>
+                    {renaming?.id === r.id ? (
+                      <span className="sched-rename">
+                        <input
+                          autoFocus maxLength={MAX_NAME} placeholder={autoTag(structures[r.id])} value={renaming.name}
+                          onChange={(e) => setRenaming({ id: r.id, name: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setRenaming(null); }}
+                          onBlur={saveName}
+                        />
+                      </span>
+                    ) : (
+                      <>
+                        <b>{r.tag}</b>
+                        <button
+                          className="rename-btn" title="Rename"
+                          onClick={(e) => { e.stopPropagation(); setNameErr(null); setRenaming({ id: r.id, name: structures[r.id].name ?? '' }); }}
+                        >✎</button>
+                      </>
+                    )}
+                  </td>
                   <td>{DEF_BY_ID[structures[r.id].defId].short}</td>
                   <td>{r.voltage}</td>
                   <td>{r.zone.replace('PTM Zone ', '')}</td>

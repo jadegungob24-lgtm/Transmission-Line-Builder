@@ -94,6 +94,13 @@ Each tower or pole's **insulator length** can be adjusted in its info panel
 conductors lower and the sag/clearance update). **Straighten section** lines up the suspension towers between two angle/dead-end
 towers on a straight, evenly spaced path (with Undo).
 
+**Names & confirmed edits:** structures can be renamed (info panel ✎, or ✎ in the
+schedule; names must be unique and show up in exports, pins and drawings; empty =
+automatic number). Changes made from a structure's info panel (move, rotate,
+insulator, coordinates, name, straighten) show live but stay unsaved until
+**Save** (or Enter); **Cancel**, closing the panel or selecting something else
+puts everything back, and unsaved changes are never autosaved.
+
 **Multi-select:** Ctrl+click structures (on the map or in the schedule) to select
 several, then rotate, set insulator length, auto-orient or demolish them together.
 

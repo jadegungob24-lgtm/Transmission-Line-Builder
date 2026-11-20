@@ -5,7 +5,7 @@ import { layoutSpan, wireHeightAt } from '../conductors/spanWires';
 import { makeCatenary, wireLength } from '../conductors/catenary';
 import { bearingDeg } from '../core/geo';
 import { formatPrs92, fromPrs92, PTM_ZONES, toPrs92 } from '../core/prs92';
-import { structureTag, useHud, useStore } from '../core/store';
+import { autoTag, editDirty, MAX_NAME, nameProblem, structureTag, useHud, useStore } from '../core/store';
 import type { Structure } from '../core/types';
 import { lineAngle, neighbours } from '../network/connectivity';
 import { SUN } from '../map/environment';
@@ -104,6 +104,7 @@ export function InfoPanel() {
   const net = useStore((s) => s.network);
   const movingId = useStore((s) => s.movingId);
   const multiCount = useStore((s) => s.multi.length);
+  const dirty = useStore((s) => editDirty(s));
   const set = useStore((s) => s.set);
   if (multiCount > 1 && !movingId) return <MultiPanel />;
   // While a structure is being moved its panel stays open, so the coordinates update live.
@@ -121,13 +122,23 @@ export function InfoPanel() {
     const ex = useStore.getState().env.exaggeration || 1;
     const warn = net.angleWarnings[st.id];
     return (
-      <div className="info panel">
+      <div className={`info panel${dirty && !moving ? ' dirty' : ''}`}>
         <div className="info-head">
           <b>{def.name}</b>
-          <button className="x" onClick={() => (moving ? runtime.ctrl?.cancel() : set({ selected: null }))} title={moving ? 'Cancel move' : 'Close'}>×</button>
+          <button
+            className="x" onClick={() => (moving ? runtime.ctrl?.cancel() : set({ selected: null }))}
+            title={moving ? 'Cancel move' : dirty ? 'Close without saving the changes' : 'Close'}
+          >×</button>
         </div>
         {moving && <p className="moving-note small">Moving · click the map to drop · right-click to cancel</p>}
-        <Row k="Structure no." v={<b>{structureTag(st)}</b>} />
+        {dirty && !moving && (
+          <div className="edit-bar">
+            <span>Unsaved changes</span>
+            <button className="primary" onClick={() => useStore.getState().saveEdit()} title="Keep the changes (Enter)">Save</button>
+            <button onClick={() => useStore.getState().cancelEdit()} title="Put everything back as it was">Cancel</button>
+          </div>
+        )}
+        <NameRow st={st} />
         <Row k="Status" v={net.energizedStructures.has(st.id) ? <span className="ok">● Energised</span> : <span className="muted">○ De-energised</span>} />
         {def.voltages !== 'any' && <Row k="Voltage class" v={<span style={{ color: VOLTAGES[st.voltage].color }}>{VOLTAGES[st.voltage].label}</span>} />}
         <Row k="Circuits" v={def.role === 'line' ? `${def.circuits}` : `${m.circuits.length} line bays`} />
@@ -305,6 +316,47 @@ function NetworkPanel() {
         </>
       )}
     </div>
+  );
+}
+
+/** Structure name: its automatic number (T-006) unless you give it one. Staged like other panel edits. */
+function NameRow({ st }: { st: Structure }) {
+  const [edit, setEdit] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { setEdit(null); setErr(null); }, [st.id]);
+  const auto = autoTag(st);
+  const apply = () => {
+    if (edit == null) return;
+    const err = nameProblem(st.id, edit);
+    if (err) return setErr(err);
+    useStore.getState().patchStructure(st.id, { name: edit.trim().slice(0, MAX_NAME) || undefined });
+    setEdit(null);
+    setErr(null);
+  };
+  return (
+    <>
+      <div className="row name-row">
+        <span className="muted">Name</span>
+        {edit == null ? (
+          <span className="name-val">
+            <b>{structureTag(st)}</b>
+            {st.name && <span className="muted"> ({auto})</span>}
+            <button className="proj-icon" onClick={() => { setErr(null); setEdit(st.name ?? ''); }} title="Rename this structure">✎</button>
+          </span>
+        ) : (
+          <span className="ins-ctl">
+            <input
+              className="name-input" autoFocus maxLength={MAX_NAME} placeholder={auto} value={edit}
+              onChange={(e) => setEdit(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') apply(); if (e.key === 'Escape') { setEdit(null); setErr(null); } }}
+            />
+            <button className="ins-ok" onClick={apply} title="Apply">✓</button>
+          </span>
+        )}
+      </div>
+      {edit != null && <p className="muted small name-hint">Leave empty to use the automatic number ({auto})</p>}
+      {err && <p className="bad small">{err}</p>}
+    </>
   );
 }
 

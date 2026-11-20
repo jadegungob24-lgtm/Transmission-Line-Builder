@@ -7,4 +7,5 @@ dist
 *.bat
 *.md
 Dockerfile
+wrangler.jsonc
 .dockerignore

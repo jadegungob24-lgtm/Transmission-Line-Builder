@@ -3,10 +3,13 @@ import { DEF_BY_ID, getModel } from '../catalog/structures';
 import { VOLTAGES, VoltageId } from '../catalog/voltages';
 import { computeNetwork, neighbours, NetworkInfo } from '../network/connectivity';
 import { bearingDeg, distanceM, enuOffset, LL, offsetLL } from './geo';
-import type { Selection, Span, Structure, Tool } from './types';
+import type { ProjectMeta, Selection, Span, Structure, Tool } from './types';
 
 const D2R = Math.PI / 180;
+/** Single-network save used before projects existed; migrated into the first project. */
 const SAVE_KEY = 'phgrid.save.v1';
+const PROJECTS_KEY = 'phgrid.projects.v1';
+const projectKey = (id: string) => `phgrid.project.${id}`;
 let idSeq = 0;
 const newId = (p: string) => `${p}${Date.now().toString(36)}${(idSeq++).toString(36)}`;
 
@@ -46,6 +49,9 @@ interface State {
   ghostRot: number | null;
   showWelcome: boolean;
   env: Env;
+  /** Saved projects (newest activity first) and the one being edited. */
+  projects: ProjectMeta[];
+  projectId: string;
 
   setTool: (t: Tool, defId?: string | null) => void;
   setVoltage: (v: VoltageId) => void;
@@ -56,12 +62,20 @@ interface State {
   removeStructure: (id: string) => void;
   removeSpan: (id: string) => void;
   patchStructure: (id: string, p: Partial<Structure>, reorientNeighbours?: boolean) => void;
+  /** Patch several structures at once, then re-orient them and their neighbours. */
+  patchStructures: (p: Record<string, Partial<Structure>>) => void;
+  /** Positions before the last "Straighten section", for its Undo button. */
+  alignUndo: { key: string; prev: Record<string, Partial<Structure>> } | null;
   setElevs: (e: Record<string, number>) => void;
   rotateSelected: (deg: number) => void;
   clearAll: () => void;
   importSave: (json: string) => boolean;
   exportSave: () => string;
   loadDemo: () => LL;
+  newProject: (name: string) => void;
+  openProject: (id: string) => void;
+  renameProject: (id: string, name: string) => void;
+  deleteProject: (id: string) => void;
 }
 
 function freeBays(S: Structure, spans: Record<string, Span>): number[] {
@@ -151,26 +165,56 @@ function reoriented(structures: Record<string, Structure>, spans: Record<string,
   return out;
 }
 
-function loadSaved(): { structures: Record<string, Structure>; spans: Record<string, Span> } {
+type NetData = { structures: Record<string, Structure>; spans: Record<string, Span> };
+
+function readJson(key: string): any {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) {
-      const d = JSON.parse(raw);
-      if (d && d.structures && d.spans) return sanitize(d);
-    }
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
   } catch {
-    /* ignore corrupt saves */
+    return null; // corrupt save or storage unavailable
   }
-  return { structures: {}, spans: {} };
+}
+function writeJson(key: string, v: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(v));
+  } catch {
+    /* storage full or unavailable */
+  }
 }
 
-function sanitize(d: any): { structures: Record<string, Structure>; spans: Record<string, Span> } {
+function loadProjectData(id: string): NetData {
+  const d = readJson(projectKey(id));
+  return d && d.structures && d.spans ? sanitize(d) : { structures: {}, spans: {} };
+}
+
+/** Project list + the current project's network; migrates the old single save into "My network". */
+function loadProjects(): { projects: ProjectMeta[]; projectId: string; data: NetData } {
+  const idx = readJson(PROJECTS_KEY);
+  if (idx && Array.isArray(idx.list) && idx.list.length) {
+    const projects: ProjectMeta[] = idx.list;
+    const projectId = projects.some((p) => p.id === idx.current) ? idx.current : projects[0].id;
+    return { projects, projectId, data: loadProjectData(projectId) };
+  }
+  const now = Date.now();
+  const first: ProjectMeta = { id: newId('p'), name: 'My network', created: now, updated: now };
+  const old = readJson(SAVE_KEY);
+  const data = old && old.structures && old.spans ? sanitize(old) : { structures: {}, spans: {} };
+  writeJson(projectKey(first.id), { version: 1, ...data });
+  writeJson(PROJECTS_KEY, { current: first.id, list: [first] });
+  return { projects: [first], projectId: first.id, data };
+}
+
+function sanitize(d: any): NetData {
   const structures: Record<string, Structure> = {};
   const spans: Record<string, Span> = {};
   for (const s of Object.values<any>(d.structures)) {
     if (s && DEF_BY_ID[s.defId] && VOLTAGES[s.voltage as VoltageId] && isFinite(s.lng) && isFinite(s.lat))
       structures[s.id] = { ...s, elev: s.elev ?? 0, builtAt: 0 };
   }
+  // number any structures saved before numbering existed, in their saved order
+  let next = nextNo(structures);
+  for (const st of Object.values(structures)) if (!(st.no! > 0)) st.no = next++;
   for (const s of Object.values<any>(d.spans)) {
     if (s && structures[s.a] && structures[s.b] && VOLTAGES[s.voltage as VoltageId])
       spans[s.id] = { ...s, slotsA: s.slotsA ?? [], slotsB: s.slotsB ?? [], builtAt: 0 };
@@ -178,7 +222,21 @@ function sanitize(d: any): { structures: Record<string, Structure>; spans: Recor
   return { structures, spans };
 }
 
-const initial = loadSaved();
+function nextNo(structures: Record<string, Structure>): number {
+  let max = 0;
+  for (const s of Object.values(structures)) if (s.no! > max) max = s.no!;
+  return max + 1;
+}
+
+/** "T-007" for line structures, "SS-002" for stations etc. Numbering is shared across the project. */
+export function structureTag(st: Structure): string {
+  const role = DEF_BY_ID[st.defId]?.role;
+  const p = role === 'substation' ? 'SS' : role === 'source' ? 'PP' : 'T';
+  return `${p}-${String(st.no ?? 0).padStart(3, '0')}`;
+}
+
+const boot = loadProjects();
+const initial = boot.data;
 
 export const useStore = create<State>()((set, get) => ({
   structures: initial.structures,
@@ -200,8 +258,52 @@ export const useStore = create<State>()((set, get) => ({
     wind: 0.35, rain: false, clouds: true, shadows: true,
     glow: true, flow: true, orbit: true, basemap: 'satellite', labels: true, exaggeration: 1,
   },
+  projects: boot.projects,
+  projectId: boot.projectId,
 
   set: (p) => set(p),
+
+  newProject: (name) => {
+    flushSave();
+    const now = Date.now();
+    const p: ProjectMeta = { id: newId('p'), name: name.trim() || 'Untitled project', created: now, updated: now };
+    writeJson(projectKey(p.id), { version: 1, structures: {}, spans: {} });
+    switchTo(p.id, [p, ...get().projects], { structures: {}, spans: {} });
+  },
+
+  openProject: (id) => {
+    if (id === get().projectId || !get().projects.some((p) => p.id === id)) return;
+    flushSave();
+    switchTo(id, get().projects, loadProjectData(id));
+  },
+
+  renameProject: (id, name) => {
+    const projects = get().projects.map((p) => (p.id === id ? { ...p, name: name.trim() || p.name } : p));
+    set({ projects });
+    writeJson(PROJECTS_KEY, { current: get().projectId, list: projects });
+  },
+
+  deleteProject: (id) => {
+    const rest = get().projects.filter((p) => p.id !== id);
+    try {
+      localStorage.removeItem(projectKey(id));
+    } catch {
+      /* storage unavailable */
+    }
+    if (id !== get().projectId) {
+      set({ projects: rest });
+      writeJson(PROJECTS_KEY, { current: get().projectId, list: rest });
+      return;
+    }
+    window.clearTimeout(saveTimer); // don't write the deleted project back
+    if (rest.length) switchTo(rest[0].id, rest, loadProjectData(rest[0].id));
+    else {
+      const now = Date.now();
+      const p: ProjectMeta = { id: newId('p'), name: 'Untitled project', created: now, updated: now };
+      writeJson(projectKey(p.id), { version: 1, structures: {}, spans: {} });
+      switchTo(p.id, [p], { structures: {}, spans: {} });
+    }
+  },
 
   setTool: (t, defId = null) => {
     const s = get();
@@ -230,7 +332,7 @@ export const useStore = create<State>()((set, get) => ({
 
   placeStructure: (s, builtAt = performance.now()) => {
     const id = newId('s');
-    const structures = { ...get().structures, [id]: { ...s, id, builtAt } };
+    const structures = { ...get().structures, [id]: { ...s, id, builtAt, no: nextNo(get().structures) } };
     set({ structures, network: computeNetwork(structures, get().spans) });
     return id;
   },
@@ -289,6 +391,21 @@ export const useStore = create<State>()((set, get) => ({
     }
     set({ structures, network: computeNetwork(structures, s.spans) });
   },
+
+  patchStructures: (p) => {
+    const s = get();
+    let structures = { ...s.structures };
+    const ids = new Set<string>();
+    for (const [id, patch] of Object.entries(p)) {
+      if (!structures[id]) continue;
+      structures[id] = { ...structures[id], ...patch };
+      ids.add(id);
+      neighbours(id, s.spans).forEach((n) => ids.add(n.other));
+    }
+    structures = reoriented(structures, s.spans, [...ids], s.autoOrient);
+    set({ structures, network: computeNetwork(structures, s.spans) });
+  },
+  alignUndo: null,
 
   setElevs: (e) => {
     const s = get();
@@ -389,19 +506,43 @@ export const useStore = create<State>()((set, get) => ({
 
 if (import.meta.env.DEV) (window as unknown as { __store: typeof useStore }).__store = useStore;
 
-// autosave (debounced)
+// autosave into the current project (debounced)
 let saveTimer: number | undefined;
-useStore.subscribe((s, p) => {
-  if (s.structures === p.structures && s.spans === p.spans) return;
+
+function saveNow() {
   window.clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => {
-    try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify({ version: 1, structures: s.structures, spans: s.spans }));
-    } catch {
-      /* storage unavailable */
-    }
-  }, 600);
+  saveTimer = undefined;
+  const s = useStore.getState();
+  writeJson(projectKey(s.projectId), { version: 1, structures: s.structures, spans: s.spans });
+  const projects = s.projects.map((p) => (p.id === s.projectId ? { ...p, updated: Date.now() } : p));
+  useStore.setState({ projects });
+  writeJson(PROJECTS_KEY, { current: s.projectId, list: projects });
+}
+
+/** Write any pending autosave right away (before switching projects). */
+function flushSave() {
+  if (saveTimer !== undefined) saveNow();
+}
+
+function switchTo(id: string, projects: ProjectMeta[], data: NetData) {
+  window.clearTimeout(saveTimer);
+  saveTimer = undefined;
+  switching = true;
+  useStore.setState({
+    projects, projectId: id, ...data, network: computeNetwork(data.structures, data.spans),
+    selected: null, chainFrom: null, movingId: null, moveOrigin: null, tool: 'select', buildDefId: null, ghostRot: null, alignUndo: null,
+  });
+  switching = false;
+  writeJson(PROJECTS_KEY, { current: id, list: projects });
+}
+let switching = false;
+
+useStore.subscribe((s, p) => {
+  if (switching || (s.structures === p.structures && s.spans === p.spans)) return;
+  window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(saveNow, 600);
 });
+window.addEventListener('beforeunload', flushSave);
 
 /** Cursor read-out; kept in its own store so mouse movement does not re-render the whole UI. */
 export interface Hud {

@@ -69,6 +69,7 @@ export function ToolIcon({ name }: { name: string }) {
     ground: <path d="M4 38 L44 38 M10 38 L14 14 L18 38 M30 38 L34 20 L38 38 M14 16 Q24 24 34 22" />,
     settings: <path d="M24 16 A8 8 0 1 0 24.1 16 M24 4 L24 10 M24 38 L24 44 M4 24 L10 24 M38 24 L44 24 M10 10 L14 14 M34 34 L38 38 M38 10 L34 14 M14 34 L10 38" />,
     help: <path d="M17 18 C17 10 31 10 31 18 C31 24 24 24 24 30 M24 36 L24 38" />,
+    table: <path d="M7 9 H41 V39 H7 Z M7 17 H41 M7 25 H41 M7 32 H41 M17 9 V39 M29 9 V39" />,
     pin: <path d="M24 44 C24 44 10 28 10 18 A14 14 0 0 1 38 18 C38 28 24 44 24 44 Z M24 13 A5 5 0 1 0 24.1 13" />,
     north: <path d="M24 4 L32 40 L24 33 L16 40 Z" />,
   };

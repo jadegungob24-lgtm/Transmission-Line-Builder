@@ -86,8 +86,17 @@ keyboard flight, and an eye-altitude status bar with a scale bar.
 dead-end, special crossing (aviation-banded), steel poles SC/DC, a 13.8 kV
 distribution pole, a substation, a thermal plant and a solar farm. Each has a
 ghost preview that turns green or red with a reason, T to rotate, and checks for
-territory, water and spacing. You can move a structure (wires update live) and
-bulldoze it.
+territory, water and spacing. You can move a structure (wires update live, and the
+info panel shows its PRS92 coordinates changing) or type PRS92 coordinates to put it
+at an exact spot, and bulldoze it with a topple/collapse animation.
+**Straighten section** lines up the suspension towers between two angle/dead-end
+towers on a straight, evenly spaced path (with Undo).
+
+**Projects & tower schedule:** each project is its own network, saved in the
+browser (new / open / rename / delete from the top bar). Every structure gets a
+number in the order it is plotted (T-001, SS-002 …). The tower schedule lists them
+live with PRS92 zone, northing/easting, lat/lng, elevation, height, heading, line
+angle and connections, and exports to Excel (.xlsx, with a Spans sheet).
 
 **Phase 3 — conductors:** stringing between towers is automatic while you
 place them, and you can also string between existing structures. Spans follow
@@ -108,9 +117,10 @@ terrain, a drifting cloud deck, and rain with lightning flashes.
 load, energised and de-energised states, circuit-km per voltage, and a
 line-angle compliance warning.
 
-**Phase 6 — performance:** shared cached geometry per (type, voltage). Towers
-switch to a silhouette LOD when small on screen. Below zoom 10.3 the 3D layer is
-replaced by a 2D overview. Conductor geometry is rebuilt only when an end
+**Phase 6 — performance:** shared cached geometry per (type, voltage), always
+drawn at full detail. Shadows are re-rendered only when something changes, and the
+terrain shadow catcher is rebuilt only once the camera settles. Below zoom 10.3 the
+3D layer is replaced by a 2D overview. Conductor geometry is rebuilt only when an end
 changes. Wind and flow animation run in the GPU shader.
 
 ## Next steps

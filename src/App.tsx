@@ -6,6 +6,7 @@ import { northUp, resetTilt, resetView } from './map/navigation';
 import { runtime, setView } from './map/runtime';
 import { NavWidget } from './ui/NavWidget';
 import { Hud, InfoPanel, Rain, Settings, SideTools, TopBar, Welcome } from './ui/Panels';
+import { SchedulePanel } from './ui/Schedule';
 import { focusSearch } from './ui/Search';
 import { Toolbar } from './ui/Toolbar';
 
@@ -17,6 +18,7 @@ const HELD_KEYS = new Set([
 
 export default function App() {
   const [settings, setSettings] = useState(false);
+  const [schedule, setSchedule] = useState(false);
   const showWelcome = useStore((s) => s.showWelcome);
   const set = useStore((s) => s.set);
 
@@ -136,8 +138,9 @@ export default function App() {
     <div className="app">
       <MapView />
       <Rain />
-      <TopBar onSettings={() => setSettings(true)} onHelp={() => set({ showWelcome: true })} />
+      <TopBar onSettings={() => setSettings(true)} onHelp={() => set({ showWelcome: true })} onSchedule={() => setSchedule(!schedule)} scheduleOpen={schedule} />
       <SideTools />
+      {schedule && <SchedulePanel onClose={() => setSchedule(false)} />}
       <InfoPanel />
       <NavWidget />
       <Hud />

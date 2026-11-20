@@ -13,6 +13,15 @@ export interface Structure {
   /** Ground elevation in metres, sampled from the terrain. */
   elev: number;
   builtAt: number;
+  /** Structure number in its project (T-001, T-002 …), in the order it was plotted. */
+  no?: number;
+}
+
+export interface ProjectMeta {
+  id: string;
+  name: string;
+  created: number;
+  updated: number;
 }
 
 export interface Span {

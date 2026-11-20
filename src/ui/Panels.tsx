@@ -5,16 +5,17 @@ import { layoutSpan, wireHeightAt } from '../conductors/spanWires';
 import { makeCatenary, wireLength } from '../conductors/catenary';
 import { bearingDeg } from '../core/geo';
 import { formatPrs92, fromPrs92, PTM_ZONES, toPrs92 } from '../core/prs92';
-import { useHud, useStore } from '../core/store';
+import { structureTag, useHud, useStore } from '../core/store';
 import { lineAngle, neighbours } from '../network/connectivity';
 import { SUN } from '../map/environment';
 import { flyTo, runtime, setView } from '../map/runtime';
 import { ToolIcon } from './Icons';
+import { ProjectMenu } from './Projects';
 import { Search } from './Search';
 
 // ------------------------------------------------------------------ top bar
 
-export function TopBar({ onSettings, onHelp }: { onSettings: () => void; onHelp: () => void }) {
+export function TopBar({ onSettings, onHelp, onSchedule, scheduleOpen }: { onSettings: () => void; onHelp: () => void; onSchedule: () => void; scheduleOpen: boolean }) {
   const net = useStore((s) => s.network);
   const env = useStore((s) => s.env);
   const setEnv = useStore((s) => s.setEnv);
@@ -34,6 +35,7 @@ export function TopBar({ onSettings, onHelp }: { onSettings: () => void; onHelp:
           <span className="muted">Philippine transmission sandbox</span>
         </div>
       </div>
+      <ProjectMenu />
       <div className="stats">
         <Stat label="Generation" value={`${gen.toFixed(0)} MW`} color="#ffd23d" />
         <Stat label="Load served" value={net.loadMW ? `${(served * 100).toFixed(0)}%` : '—'} color={served >= 0.999 ? '#39c98a' : served > 0 ? '#ffa63d' : '#9aa7b4'} />
@@ -47,6 +49,7 @@ export function TopBar({ onSettings, onHelp }: { onSettings: () => void; onHelp:
         <button className={`chip ${env.clouds ? 'on' : ''}`} onClick={() => setEnv({ clouds: !env.clouds })} title="Clouds">☁</button>
       </div>
       <div className="top-actions">
+        <button className={`icon-btn ${scheduleOpen ? 'on' : ''}`} onClick={onSchedule} title="Tower schedule & Excel export"><ToolIcon name="table" /></button>
         <button className="icon-btn" onClick={onHelp} title="Help"><ToolIcon name="help" /></button>
         <button className="icon-btn" onClick={onSettings} title="Settings"><ToolIcon name="settings" /></button>
       </div>
@@ -121,6 +124,7 @@ export function InfoPanel() {
           <button className="x" onClick={() => (moving ? runtime.ctrl?.cancel() : set({ selected: null }))} title={moving ? 'Cancel move' : 'Close'}>×</button>
         </div>
         {moving && <p className="moving-note small">Moving · click the map to drop · right-click to cancel</p>}
+        <Row k="Structure no." v={<b>{structureTag(st)}</b>} />
         <Row k="Status" v={net.energizedStructures.has(st.id) ? <span className="ok">● Energised</span> : <span className="muted">○ De-energised</span>} />
         {def.voltages !== 'any' && <Row k="Voltage class" v={<span style={{ color: VOLTAGES[st.voltage].color }}>{VOLTAGES[st.voltage].label}</span>} />}
         <Row k="Circuits" v={def.role === 'line' ? `${def.circuits}` : `${m.circuits.length} line bays`} />
@@ -147,6 +151,7 @@ export function InfoPanel() {
             </>
           )}
         </div>
+        {!moving && <AlignSection sel={{ kind: 'structure', id: st.id }} />}
       </div>
     );
   }
@@ -208,6 +213,47 @@ function SpanInfo({ id }: { id: string }) {
       <div className="info-actions">
         <button className="danger" onClick={() => useStore.getState().removeSpan(sp.id)}>Remove conductors</button>
       </div>
+      <AlignSection sel={{ kind: 'span', id: sp.id }} />
+    </div>
+  );
+}
+
+/**
+ * "Straighten section": line up the suspension towers between the two angle /
+ * dead-end towers that bound this part of the line, evenly spaced. With Undo.
+ */
+function AlignSection({ sel }: { sel: { kind: 'structure' | 'span'; id: string } }) {
+  const structures = useStore((s) => s.structures);
+  const spans = useStore((s) => s.spans);
+  const undo = useStore((s) => s.alignUndo);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const key = `${sel.kind}:${sel.id}`;
+  const chain = useMemo(() => runtime.ctrl?.sectionOf(sel) ?? null, [structures, spans, sel.kind, sel.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => setMsg(null), [key]);
+  const canUndo = undo?.key === key;
+  if (!canUndo && (!chain || chain.length < 3)) return null;
+
+  const ends = chain ? `${structureTag(structures[chain[0]])} → ${structureTag(structures[chain[chain.length - 1]])}` : '';
+  const run = async () => {
+    setBusy(true);
+    setMsg(null);
+    const err = runtime.ctrl ? await runtime.ctrl.straighten(sel) : 'Map not ready';
+    setBusy(false);
+    setMsg(err ? { text: err, ok: false } : { text: `Aligned ${chain!.length - 2} structures between ${ends}`, ok: true });
+  };
+  return (
+    <div className="align">
+      <div className="info-actions">
+        {chain && chain.length >= 3 && (
+          <button onClick={run} disabled={busy} title={`Line up the ${chain.length - 2} intermediate structures between ${ends} on a straight line, evenly spaced`}>
+            {busy ? 'Aligning…' : '⇹ Straighten section'}
+          </button>
+        )}
+        {canUndo && <button onClick={() => { runtime.ctrl?.undoStraighten(); setMsg(null); }}>Undo straighten</button>}
+      </div>
+      {chain && chain.length >= 3 && !msg && <p className="muted small">Section {ends} · {chain.length - 2} intermediate structures</p>}
+      {msg && <p className={`small ${msg.ok ? 'ok' : 'bad'}`}>{msg.text}</p>}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import type { Map as MLMap, MapMouseEvent } from 'maplibre-gl';
 import { DEF_BY_ID, getModel, StructureDef } from '../catalog/structures';
 import { VOLTAGES } from '../catalog/voltages';
 import { bearingDeg, distanceM, enuOffset, inPhilippines, LL, offsetLL } from '../core/geo';
-import { checkLink, useHud, useStore } from '../core/store';
+import { checkLink, structureTag, useHud, useStore } from '../core/store';
 import type { Span, Structure } from '../core/types';
 import { neighbours } from '../network/connectivity';
 import { runtime } from './runtime';
@@ -172,6 +172,108 @@ export class Controller {
     useStore.getState().patchStructure(id, { lng: p.lng, lat: p.lat, elev: moved.elev }, true);
     this.refresh();
     return null;
+  }
+
+  /**
+   * The line section through a structure or span: the run of intermediate
+   * (suspension) structures between two anchors (angle / dead-end towers,
+   * stations, line ends). Returns the ordered ids, anchors at both ends.
+   */
+  sectionOf(sel: { kind: 'structure' | 'span'; id: string }): string[] | null {
+    const { structures, spans } = useStore.getState();
+    const through = (id: string) => {
+      const st = structures[id];
+      if (!st) return false;
+      const def = DEF_BY_ID[st.defId];
+      return def.role === 'line' && (def.maxAngle ?? 90) <= 15 && !getModel(st.defId, st.voltage).strain && neighbours(id, spans).length === 2;
+    };
+    let a: string;
+    let b: string;
+    if (sel.kind === 'span') {
+      const sp = spans[sel.id];
+      if (!sp) return null;
+      [a, b] = [sp.a, sp.b];
+    } else {
+      if (!through(sel.id)) return null;
+      const nb = neighbours(sel.id, spans);
+      return [...this.walk(nb[0].other, sel.id, through).reverse(), sel.id, ...this.walk(nb[1].other, sel.id, through)];
+    }
+    return [...this.walk(a, b, through).reverse(), ...this.walk(b, a, through)];
+  }
+
+  /** Follow the line from `from` (coming from `prev`) through intermediate structures to the next anchor. */
+  private walk(from: string, prev: string, through: (id: string) => boolean): string[] {
+    const { spans } = useStore.getState();
+    const out = [from];
+    const seen = new Set([prev, from]);
+    let cur = from;
+    let back = prev;
+    while (through(cur)) {
+      const next = neighbours(cur, spans).map((n) => n.other).find((o) => o !== back);
+      if (!next || seen.has(next)) break; // closed loop
+      out.push(next);
+      seen.add(next);
+      back = cur;
+      cur = next;
+    }
+    return out;
+  }
+
+  /**
+   * Line up the intermediate structures of a section on the straight line
+   * between its two anchors, evenly spaced. Resolves to an error message, or null.
+   */
+  async straighten(sel: { kind: 'structure' | 'span'; id: string }): Promise<string | null> {
+    const chain = this.sectionOf(sel);
+    if (!chain) return 'Select a suspension tower or a span inside a line section';
+    if (chain.length < 3) return 'This section has no intermediate towers to align';
+    const s0 = useStore.getState();
+    const A = s0.structures[chain[0]];
+    const B = s0.structures[chain[chain.length - 1]];
+    const mids = chain.slice(1, -1);
+    const [e, n] = enuOffset(A, B);
+    const k = chain.length - 1;
+    const targets = mids.map((_, i) => offsetLL(A, (e * (i + 1)) / k, (n * (i + 1)) / k));
+
+    // make sure the terrain under the new spots is loaded before reading elevations
+    const map = this.map;
+    const b = map.getBounds();
+    if (map.getZoom() < 12 || !targets.every((p) => b.contains([p.lng, p.lat]))) {
+      runtime.nav?.interrupt();
+      const lngs = [A.lng, B.lng];
+      const lats = [A.lat, B.lat];
+      await new Promise<void>((done) => {
+        map.once('moveend', () => (map.areTilesLoaded() ? done() : map.once('idle', () => done())));
+        map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 120, maxZoom: 16, duration: 900 });
+      });
+    }
+
+    const s = useStore.getState();
+    const ignore = new Set(chain);
+    const patch: Record<string, Partial<Structure>> = {};
+    const prev: Record<string, Partial<Structure>> = {};
+    for (let i = 0; i < mids.length; i++) {
+      const st = s.structures[mids[i]];
+      if (!st) return 'The section changed; try again';
+      const p = targets[i];
+      const moved: Structure = { ...st, lng: p.lng, lat: p.lat, elev: this.elev(p), manualRot: false };
+      const prob = this.siteProblem(moved, ignore);
+      if (prob) return `${structureTag(st)}: ${prob}`;
+      patch[st.id] = { lng: p.lng, lat: p.lat, elev: moved.elev, manualRot: false };
+      prev[st.id] = { lng: st.lng, lat: st.lat, elev: st.elev, rotation: st.rotation, manualRot: st.manualRot };
+    }
+    s.patchStructures(patch);
+    s.set({ alignUndo: { key: `${sel.kind}:${sel.id}`, prev } });
+    this.refresh();
+    return null;
+  }
+
+  undoStraighten() {
+    const s = useStore.getState();
+    if (!s.alignUndo) return;
+    s.patchStructures(s.alignUndo.prev);
+    s.set({ alignUndo: null });
+    this.refresh();
   }
 
   private ghostSpan(A: Structure, B: Structure, extra?: Record<string, Span>) {

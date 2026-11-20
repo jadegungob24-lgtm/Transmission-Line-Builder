@@ -66,7 +66,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .search-msg { padding: 7px 10px; font-size: 12px; color: var(--muted); }
 .search-attrib { padding: 4px 10px 2px; font-size: 10px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 4px; }
 
-/* google-earth style navigation widget */
+.orbit-hint {
+  position: absolute; top: 76px; left: 66px; z-index: 4;
+  background: rgba(10, 18, 28, 0.88); border: 1px solid var(--line); border-radius: 20px;
+  padding: 6px 14px; font-size: 12.5px; pointer-events: none; white-space: nowrap;
+  animation: hint-in 0.25s ease-out;
+}
+@keyframes hint-in { from { opacity: 0; transform: translateY(-6px); } }
+
+/* navigation widget */
 .navw { position: absolute; right: 12px; bottom: 34px; z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .compass {
   width: 68px; height: 68px; border-radius: 50%; cursor: grab; touch-action: none;

@@ -326,6 +326,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <Toggle label="Dynamic shadows" v={env.shadows} on={(v) => setEnv({ shadows: v })} />
         <Toggle label="Energised conductor glow" v={env.glow} on={(v) => setEnv({ glow: v })} />
         <Toggle label="Animated power flow" v={env.flow} on={(v) => setEnv({ flow: v })} />
+        <Toggle label="Orbit around a structure after double-clicking it" v={env.orbit} on={(v) => setEnv({ orbit: v })} />
         <Toggle label="Clouds" v={env.clouds} on={(v) => setEnv({ clouds: v })} />
         <Toggle label="Rain" v={env.rain} on={(v) => setEnv({ rain: v })} />
         <label className="slider">Wind <b>{Math.round(env.wind * 100)}%</b>
@@ -376,11 +377,11 @@ export function Welcome({ onClose }: { onClose: () => void }) {
         <div className="keys">
           <div className="keys-head">Camera</div>
           <div className="keys-head">Building</div>
-          <div><kbd>Left-drag</kbd> / <kbd>Middle-drag</kbd> pan</div>
+          <div><kbd>Left-drag</kbd> pan · <kbd>Right-drag</kbd> zoom</div>
           <div><kbd>Left-click</kbd> place / select</div>
-          <div><kbd>Right-drag</kbd> / <kbd>Shift</kbd>/<kbd>Ctrl</kbd>+drag rotate &amp; tilt</div>
+          <div><kbd>Middle-drag</kbd> / <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+drag rotate &amp; tilt</div>
           <div><kbd>Right-click</kbd> / <kbd>Esc</kbd> cancel / end line</div>
-          <div><kbd>Wheel</kbd> zoom to cursor · <kbd>Double-click</kbd> zoom in</div>
+          <div><kbd>Wheel</kbd> zoom to cursor · <kbd>Esc</kbd> leave fly-in view</div>
           <div><kbd>T</kbd> / <kbd>Shift+T</kbd> rotate structure</div>
           <div><kbd>W A S D</kbd> / arrows pan · <kbd>Q E</kbd> orbit</div>
           <div><kbd>V M X</kbd> select · move · bulldoze</div>
@@ -391,7 +392,7 @@ export function Welcome({ onClose }: { onClose: () => void }) {
           <div><kbd>1 2 3</kbd> top / isometric / ground view</div>
           <div><kbd>Delete</kbd> demolish selection</div>
           <div><kbd>/</kbd> or <kbd>Ctrl+F</kbd> search places</div>
-          <div><kbd>Double-click</kbd> a structure to fly to it</div>
+          <div><kbd>Double-click</kbd> a tower / span: fly in &amp; orbit</div>
         </div>
         <p className="small muted">Tip: start with a Power Plant, then pick a tower and click across the land. Each click adds a tower and strings conductors from the previous one. Finish by clicking a Substation.</p>
         <div className="info-actions">

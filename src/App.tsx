@@ -68,8 +68,18 @@ export default function App() {
       }
       const map = runtime.map;
       switch (k) {
-        case 'escape': runtime.ctrl?.cancel(); break;
-        case 'r': if (map) resetView(map); break;
+        case 'escape': {
+          // Cancel a construction action first; otherwise leave a fly-in view
+          // (Laguna map behaviour), otherwise just clear the selection.
+          const busy = s.tool !== 'select' || s.movingId || s.chainFrom;
+          if (!busy && runtime.nav?.canExitView) runtime.nav.exitView();
+          else runtime.ctrl?.cancel();
+          break;
+        }
+        case 'r':
+          runtime.nav?.forgetReturn();
+          if (map) resetView(map);
+          break;
         case 't': runtime.ctrl?.rotate(e.shiftKey ? -15 : 15); break;
         case 'v': s.setTool('select'); break;
         case 'm': s.setTool('move'); break;

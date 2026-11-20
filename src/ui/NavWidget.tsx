@@ -21,6 +21,7 @@ export function NavWidget() {
     const map = runtime.map;
     if (!map) return;
     e.preventDefault();
+    runtime.nav?.interrupt();
     drag.current = { startAngle: angleAt(e), startBearing: map.getBearing(), moved: false };
     try {
       ring.current!.setPointerCapture(e.pointerId);
@@ -51,6 +52,8 @@ export function NavWidget() {
   };
 
   return (
+    <>
+    <OrbitHint />
     <div className="navw">
       <div
         ref={ring}
@@ -72,10 +75,10 @@ export function NavWidget() {
         </svg>
       </div>
       <div className="navw-col panel">
-        <button onClick={() => runtime.map && toggle3D(runtime.map)} title={is3D ? 'Switch to 2D (flat) view (U)' : 'Switch to 3D (tilted) view'}>
+        <button onClick={() => runtime.map && toggle3D(runtime.map)} title={is3D ? 'Switch to top-down view (U)' : 'Switch to oblique 3D view'}>
           <b>{is3D ? '3D' : '2D'}</b>
         </button>
-        <button onClick={() => runtime.map && resetView(runtime.map)} title="Reset view: face north and look straight down here (R)">
+        <button onClick={() => { runtime.nav?.forgetReturn(); if (runtime.map) resetView(runtime.map); }} title="Reset view: face north and look straight down here (R)">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M4.5 12 A7.5 7.5 0 1 0 7 6.4" />
             <path d="M3.5 4.5 L7 6.4 L5.6 10" />
@@ -86,12 +89,24 @@ export function NavWidget() {
         <button onClick={() => zoom(1)} title="Zoom in (+ / Page Up)">＋</button>
         <button onClick={() => zoom(-1)} title="Zoom out (− / Page Down)">－</button>
         <span className="sep" />
-        <button onClick={() => runtime.map && flyHome(runtime.map)} title="Fly to the whole Philippines">
+        <button onClick={() => { runtime.nav?.forgetReturn(); if (runtime.map) flyHome(runtime.map); }} title="Fit your whole network in view (or the whole country if it's empty)">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 11 L12 4 L21 11 M6 9.5 V20 H18 V9.5" />
           </svg>
         </button>
       </div>
+    </div>
+    </>
+  );
+}
+
+/** Shown while the camera orbits a double-clicked structure or span (as in the Laguna map). */
+function OrbitHint() {
+  const orbiting = useHud((h) => h.orbiting);
+  if (!orbiting) return null;
+  return (
+    <div className="orbit-hint">
+      <kbd>Esc</kbd> exit view · <kbd>R</kbd> reset view · click or drag to take control
     </div>
   );
 }

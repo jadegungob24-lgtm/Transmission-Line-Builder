@@ -17,6 +17,8 @@ export interface Env {
   shadows: boolean;
   glow: boolean;
   flow: boolean;
+  /** Slowly orbit a structure or span after double-clicking it. */
+  orbit: boolean;
   basemap: 'satellite' | 'streets' | 'topo';
   labels: boolean;
   exaggeration: number;
@@ -196,7 +198,7 @@ export const useStore = create<State>()((set, get) => ({
   showWelcome: true,
   env: {
     wind: 0.35, rain: false, clouds: true, shadows: true,
-    glow: true, flow: true, basemap: 'satellite', labels: true, exaggeration: 1,
+    glow: true, flow: true, orbit: true, basemap: 'satellite', labels: true, exaggeration: 1,
   },
 
   set: (p) => set(p),
@@ -414,5 +416,7 @@ export interface Hud {
   msg: string;
   ok: boolean;
   fps: number;
+  /** True while the camera slowly orbits a double-clicked structure or span. */
+  orbiting: boolean;
 }
-export const useHud = create<Hud>()(() => ({ lng: 0, lat: 0, elev: 0, zoom: 5, bearing: 0, pitch: 0, alt: 0, msg: '', ok: true, fps: 0 }));
+export const useHud = create<Hud>()(() => ({ lng: 0, lat: 0, elev: 0, zoom: 5, bearing: 0, pitch: 0, alt: 0, msg: '', ok: true, fps: 0, orbiting: false }));

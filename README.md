@@ -76,9 +76,11 @@ src/
 **Phase 1 — environment:** 3D terrain over the whole country, camera locked
 to the Philippines, top / isometric / ground-level views,
 satellite/streets/topo basemaps, terrain exaggeration. The camera navigates like
-Google Earth: Shift/Ctrl/right-drag to orbit, a draggable compass, a 2D/3D toggle,
+the Laguna Floating TL Map (Cesium-style): right-drag zoom, middle/Ctrl/Shift-drag
+tilt and rotate, double-click fly-in with a slow orbit, Esc to return, and R to reset
+to north-up top-down. Google Earth extras: a draggable compass, a 2D/3D toggle,
 place search (OpenStreetMap Nominatim, Philippines only, or typed coordinates),
-double-click fly-to, keyboard flight, and an eye-altitude status bar with a scale bar.
+keyboard flight, and an eye-altitude status bar with a scale bar.
 
 **Phase 2 — placement:** 12 structure types: DC/SC suspension, angle, DC/SC
 dead-end, special crossing (aviation-banded), steel poles SC/DC, a 13.8 kV

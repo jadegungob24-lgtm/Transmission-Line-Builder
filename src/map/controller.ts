@@ -23,7 +23,6 @@ const GHOST = '__ghost';
 export class Controller {
   private mouse: { x: number; y: number; lng: number; lat: number } | null = null;
   private rightDown: { x: number; y: number } | null = null;
-  private midDown: { x: number; y: number } | null = null;
   private lastGhostRot = 0;
   private elevTimer: number;
   private unsub: () => void;
@@ -33,21 +32,13 @@ export class Controller {
     map.on('mousemove', this.onMove);
     map.on('click', this.onClick);
     const el = map.getCanvasContainer();
+    // Camera drags (middle / right / modifier drags) live in navigation.ts.
+    // Here a right-click without dragging cancels the current action.
     const down = (e: MouseEvent) => {
       if (e.button === 2) this.rightDown = { x: e.clientX, y: e.clientY };
-      if (e.button === 1) {
-        e.preventDefault();
-        this.midDown = { x: e.clientX, y: e.clientY };
-      }
     };
-    const move = (e: MouseEvent) => {
-      if (this.midDown) {
-        map.panBy([this.midDown.x - e.clientX, this.midDown.y - e.clientY], { duration: 0 });
-        this.midDown = { x: e.clientX, y: e.clientY };
-      }
-    };
+    const move = () => {};
     const up = (e: MouseEvent) => {
-      if (e.button === 1) this.midDown = null;
       if (e.button === 2 && this.rightDown) {
         if (Math.hypot(e.clientX - this.rightDown.x, e.clientY - this.rightDown.y) < 5) this.cancel();
         this.rightDown = null;

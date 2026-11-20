@@ -114,25 +114,26 @@ Press **Ctrl + C** in the PowerShell window.
 
 ## Controls
 
-The camera works like **Google Earth**, with a few extra city-builder shortcuts.
+The camera works like the **Laguna Floating TL Map**, plus a few Google Earth extras.
 
 **Camera**
 
 | Action | Control |
 |---|---|
-| Pan the map | **Left-drag**, **Middle-drag**, **W A S D** or **arrow keys** |
-| Rotate and tilt | **Right-drag**, **Shift + drag** or **Ctrl + drag** |
+| Pan the map | **Left-drag**, **W A S D** or **arrow keys** |
+| Zoom | **Mouse wheel** (toward the cursor), or **right-drag** up/down (down = closer) |
+| Rotate and tilt | **Middle-drag**, **Ctrl + drag** or **Shift + drag** |
 | Rotate and tilt with keys | **Shift + arrow keys**, or **Q / E** to orbit |
-| Zoom toward the cursor | **Mouse wheel** |
 | Zoom with keys | **+ / −** or **Page Up / Page Down** (hold) |
-| Zoom in on a point | **Double-click** (Select tool) |
-| Fly to a structure | **Double-click** it (Select tool) |
+| Fly in to a tower or span | **Double-click** it (Select tool). The camera then slowly orbits it until you click, drag or scroll. Turn the orbit off in **⚙ Settings** |
+| Leave the fly-in view | **Esc**: flies back to where you were and clears the selection |
+| Zoom in on a point | **Double-click** empty ground (Select tool) |
 | **Reset view** (face north, look straight down at the spot you're exploring) | **R**, or the **⟲** button (bottom right) |
 | Face north | **N**, or click the **compass** |
 | Look straight down | **U**, or click **3D** to switch to **2D** |
 | Rotate freely | **Drag the compass ring** |
 | Search for a place or coordinates | **/** or **Ctrl + F** |
-| Fly to the whole country | **⌂ home** button (bottom right) |
+| Fit your whole network in view | **⌂ home** button (bottom right); the whole country if you haven't built anything yet |
 | Top / isometric / ground view | **1 / 2 / 3** |
 
 **Building**

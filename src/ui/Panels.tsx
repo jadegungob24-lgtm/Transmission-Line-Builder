@@ -3,25 +3,24 @@ import { DEF_BY_ID, getModel } from '../catalog/structures';
 import { VOLTAGES, VoltageId } from '../catalog/voltages';
 import { layoutSpan, wireHeightAt } from '../conductors/spanWires';
 import { makeCatenary, wireLength } from '../conductors/catenary';
-import { bearingDeg, PLACES } from '../core/geo';
+import { bearingDeg } from '../core/geo';
 import { formatPrs92, toPrs92 } from '../core/prs92';
 import { useHud, useStore } from '../core/store';
 import { lineAngle, neighbours } from '../network/connectivity';
-import { formatHour, sunAt } from '../map/environment';
+import { SUN } from '../map/environment';
 import { flyTo, runtime, setView } from '../map/runtime';
 import { ToolIcon } from './Icons';
+import { Search } from './Search';
 
 // ------------------------------------------------------------------ top bar
-
-const SPEEDS = [0, 0.05, 0.2, 0.8];
 
 export function TopBar({ onSettings, onHelp }: { onSettings: () => void; onHelp: () => void }) {
   const net = useStore((s) => s.network);
   const env = useStore((s) => s.env);
   const setEnv = useStore((s) => s.setEnv);
   const nStruct = useStore((s) => Object.keys(s.structures).length);
-  const sun = sunAt(env.timeOfDay);
-  const solarNow = net.solarMW * Math.max(0, Math.sin((Math.PI * (env.timeOfDay - 6)) / 12));
+  // Solar output under the fixed daytime sun (less under rain clouds)
+  const solarNow = net.solarMW * Math.sin((SUN.elevation * Math.PI) / 180) * (env.rain ? 0.35 : 1);
   const gen = net.capacityMW - net.solarMW + solarNow;
   const ckm = Object.values(net.circuitKm).reduce((a, b) => a + b, 0);
   const served = net.loadMW > 0 ? Math.min(1, Math.min(gen, net.servedMW) / net.loadMW) : 0;
@@ -42,21 +41,8 @@ export function TopBar({ onSettings, onHelp }: { onSettings: () => void; onHelp:
         <Stat label="Structures" value={String(nStruct)} />
         <Stat label="Energised grids" value={`${net.energizedIslands}/${net.islands}`} />
       </div>
-      <div className="clock">
-        <span className="sun" style={{ opacity: 0.4 + 0.6 * (1 - sun.night) }}>{sun.night > 0.5 ? '☾' : '☀'}</span>
-        <input
-          type="range" min={0} max={24} step={0.05} value={env.timeOfDay}
-          onChange={(e) => setEnv({ timeOfDay: parseFloat(e.target.value) })}
-          title="Time of day"
-        />
-        <b className="time">{formatHour(env.timeOfDay)}</b>
-        <div className="speed">
-          {SPEEDS.map((sp, i) => (
-            <button key={i} className={env.timeSpeed === sp ? 'on' : ''} onClick={() => setEnv({ timeSpeed: sp })} title={i === 0 ? 'Pause (Space)' : `Speed ${i}`}>
-              {i === 0 ? '❚❚' : '▶'.repeat(i)}
-            </button>
-          ))}
-        </div>
+      <Search />
+      <div className="weather">
         <button className={`chip ${env.rain ? 'on' : ''}`} onClick={() => setEnv({ rain: !env.rain })} title="Rain and storm wind">🌧</button>
         <button className={`chip ${env.clouds ? 'on' : ''}`} onClick={() => setEnv({ clouds: !env.clouds })} title="Clouds">☁</button>
       </div>
@@ -82,12 +68,6 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
 export function SideTools() {
   const tool = useStore((s) => s.tool);
   const setTool = useStore((s) => s.setTool);
-  const [places, setPlaces] = useState(false);
-  const [bearing, setBearing] = useState(0);
-  useEffect(() => {
-    const t = window.setInterval(() => setBearing(runtime.map?.getBearing() ?? 0), 200);
-    return () => window.clearInterval(t);
-  }, []);
   const tools: { id: 'select' | 'move' | 'bulldoze'; label: string; key: string }[] = [
     { id: 'select', label: 'Select / inspect', key: 'V' },
     { id: 'move', label: 'Move structure', key: 'M' },
@@ -106,21 +86,7 @@ export function SideTools() {
         <button className="icon-btn" onClick={() => setView('top')} title="Top-down view (1)"><ToolIcon name="top" /></button>
         <button className="icon-btn" onClick={() => setView('iso')} title="Isometric view (2)"><ToolIcon name="iso" /></button>
         <button className="icon-btn" onClick={() => setView('ground')} title="Ground-level view (3)"><ToolIcon name="ground" /></button>
-        <button className="icon-btn" onClick={() => runtime.map?.easeTo({ bearing: 0, duration: 600 })} title="Reset north">
-          <div style={{ transform: `rotate(${-bearing}deg)`, width: '100%', height: '100%', color: '#ff7a6a' }}><ToolIcon name="north" /></div>
-        </button>
       </div>
-      <div className="panel col">
-        <button className={`icon-btn ${places ? 'on' : ''}`} onClick={() => setPlaces(!places)} title="Jump to a region"><ToolIcon name="pin" /></button>
-      </div>
-      {places && (
-        <div className="places panel">
-          {PLACES.map((p) => (
-            <button key={p.name} onClick={() => { flyTo(p.lng, p.lat, p.zoom); setPlaces(false); }}>{p.name}</button>
-          ))}
-          <button onClick={() => { runtime.map?.fitBounds([[116.6, 4.4], [127.0, 21.3]], { pitch: 30, bearing: 0, duration: 2000 }); setPlaces(false); }}>Whole country</button>
-        </div>
-      )}
     </div>
   );
 }
@@ -311,11 +277,15 @@ export function Hud() {
     <>
       {h.msg && <div className={`hint ${h.ok ? '' : 'bad'}`}>{h.msg}</div>}
       <div className="coords">
-        {h.lat.toFixed(4)}°N {h.lng.toFixed(4)}°E · {h.elev.toFixed(0)} m{ex !== 1 ? ` (×${ex} relief)` : ''} · z{h.zoom.toFixed(1)} · {h.fps} fps
+        {h.lat.toFixed(4)}°N {h.lng.toFixed(4)}°E · elev {h.elev.toFixed(0)} m{ex !== 1 ? ` (×${ex} relief)` : ''} · eye alt {formatAlt(h.alt)} · heading {Math.round(((h.bearing % 360) + 360) % 360)}° · tilt {Math.round(h.pitch)}°
         {tool !== 'select' && <span className="muted"> · right-click to cancel</span>}
       </div>
     </>
   );
+}
+
+function formatAlt(m: number) {
+  return m >= 10000 ? `${(m / 1000).toFixed(0)} km` : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
 }
 
 // ------------------------------------------------------------------ settings
@@ -404,18 +374,24 @@ export function Welcome({ onClose }: { onClose: () => void }) {
         <h2>⚡ PH Grid Builder</h2>
         <p>Build electrical transmission lines across a 3D Philippines. Place towers on real terrain, string sagging three-phase conductors between them, and connect power plants to substations to energise the grid.</p>
         <div className="keys">
+          <div className="keys-head">Camera</div>
+          <div className="keys-head">Building</div>
+          <div><kbd>Left-drag</kbd> / <kbd>Middle-drag</kbd> pan</div>
           <div><kbd>Left-click</kbd> place / select</div>
-          <div><kbd>Right-click</kbd> cancel / end line</div>
-          <div><kbd>Left-drag</kbd> or <kbd>Middle-drag</kbd> pan</div>
-          <div><kbd>Right-drag</kbd> rotate &amp; tilt camera</div>
-          <div><kbd>Wheel</kbd> zoom</div>
+          <div><kbd>Right-drag</kbd> / <kbd>Shift</kbd>/<kbd>Ctrl</kbd>+drag rotate &amp; tilt</div>
+          <div><kbd>Right-click</kbd> / <kbd>Esc</kbd> cancel / end line</div>
+          <div><kbd>Wheel</kbd> zoom to cursor · <kbd>Double-click</kbd> zoom in</div>
           <div><kbd>R</kbd> / <kbd>Shift+R</kbd> rotate structure</div>
-          <div><kbd>W A S D</kbd> pan · <kbd>Q E</kbd> orbit</div>
-          <div><kbd>1 2 3</kbd> top / isometric / ground view</div>
+          <div><kbd>W A S D</kbd> / arrows pan · <kbd>Q E</kbd> orbit</div>
           <div><kbd>V M X</kbd> select · move · bulldoze</div>
-          <div><kbd>C</kbd> string conductors · <kbd>Space</kbd> pause time</div>
+          <div><kbd>Shift</kbd>+arrows rotate &amp; tilt · <kbd>+ −</kbd> zoom</div>
+          <div><kbd>C</kbd> string conductors · <kbd>[ ]</kbd> voltage</div>
+          <div><kbd>N</kbd> face north · <kbd>U</kbd> look straight down</div>
           <div><kbd>F1–F5</kbd> construction menus</div>
+          <div><kbd>1 2 3</kbd> top / isometric / ground view</div>
           <div><kbd>Delete</kbd> demolish selection</div>
+          <div><kbd>/</kbd> or <kbd>Ctrl+F</kbd> search places</div>
+          <div><kbd>Double-click</kbd> a structure to fly to it</div>
         </div>
         <p className="small muted">Tip: start with a Power Plant, then pick a tower and click across the land. Each click adds a tower and strings conductors from the previous one. Finish by clicking a Substation.</p>
         <div className="info-actions">

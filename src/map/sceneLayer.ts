@@ -7,7 +7,7 @@ import { makeWireMaterial, wireShared } from '../conductors/wireMaterial';
 import { distanceM, LL, mercScale, mercX, mercY } from '../core/geo';
 import { useStore } from '../core/store';
 import type { Span, Structure } from '../core/types';
-import { sunAt } from './environment';
+import { SUN } from './environment';
 
 // Three.js scene rendered inside MapLibre's GL context as a custom layer.
 //
@@ -479,30 +479,28 @@ export class SceneLayer implements CustomLayerInterface {
     this.viewProj.copy(m);
 
     // environment
-    const sun = sunAt(env.timeOfDay);
+    const sun = SUN;
     const mpp = (40075016.686 * Math.cos(center.lat * D2R)) / (512 * Math.pow(2, zoom));
     wireShared.uTime.value = now / 1000;
     wireShared.uWind.value = env.wind * (env.rain ? 1.6 : 1);
     wireShared.uMinRad.value = mpp * 0.7;
     wireShared.uSunDir.value.copy(sun.dir);
-    wireShared.uSunI.value = 1 - sun.night;
-    wireShared.uAmb.value = 0.18 + 0.4 * (1 - sun.night);
-    wireShared.uNight.value = sun.night;
+    wireShared.uSunI.value = env.rain ? 0.5 : 1;
+    wireShared.uAmb.value = 0.58;
+    wireShared.uNight.value = 0;
     wireShared.uGlow.value = env.glow ? 1 : 0;
     wireShared.uFlow.value = env.flow ? 1 : 0;
 
-    const day = 1 - sun.night;
-    const warm = new THREE.Color(0xffffff).lerp(new THREE.Color(0xffb27a), sun.golden);
-    this.sun.color.copy(warm);
-    this.sun.intensity = (env.rain ? 0.9 : 2.4) * day + 0.15;
-    this.hemi.intensity = 0.35 + 0.85 * day;
-    this.hemi.color.set(sun.night > 0.5 ? 0x7d8fbf : 0xdfeeff);
+    this.sun.color.set(0xffffff);
+    this.sun.intensity = env.rain ? 1.05 : 2.55;
+    this.hemi.intensity = 1.2;
+    this.hemi.color.set(0xdfeeff);
     const glowPulse = 0.75 + 0.25 * Math.sin(now / 260);
     this.matGlowOn.color.setRGB(0.55 + 0.45 * glowPulse, 0.85 + 0.15 * glowPulse, 1);
 
     const show3D = zoom >= SHOW_3D_ZOOM;
     const centerW = this.worldOf(center);
-    const shadowsOn = env.shadows && show3D && zoom >= 13 && day > 0.05;
+    const shadowsOn = env.shadows && show3D && zoom >= 13 && !env.rain;
     this.renderer.shadowMap.enabled = shadowsOn;
     this.catcher.visible = shadowsOn;
     this.sun.castShadow = shadowsOn;
@@ -567,16 +565,20 @@ export class SceneLayer implements CustomLayerInterface {
     });
 
     // clouds: a high deck that fades as the camera comes down
-    const cloudA = env.clouds ? Math.max(0, Math.min(1, (12.8 - zoom) / 2.5)) : 0;
+    // Visible while "flying" between regional and local views; faded out at
+    // country scale, where the cloud texture would read as noise.
+    const cloudIn = Math.max(0, Math.min(1, (zoom - 7.5) / 1.5));
+    const cloudOut = Math.max(0, Math.min(1, (12.8 - zoom) / 2.5));
+    const cloudA = env.clouds ? cloudIn * cloudOut : 0;
     this.clouds.visible = cloudA > 0.01;
     if (this.clouds.visible) {
       const size = mpp * Math.max(map.getCanvas().clientWidth, map.getCanvas().clientHeight) * 4;
       this.clouds.position.set(centerW.x, centerW.y, 3200);
       this.clouds.scale.set(size, size, 1);
       const u = this.clouds.material.uniforms;
-      u.uOpacity.value = cloudA * (env.rain ? 0.85 : 0.55) * (0.35 + 0.65 * day);
+      u.uOpacity.value = cloudA * (env.rain ? 0.85 : 0.55);
       u.uCover.value = env.rain ? 0.32 : 0.52;
-      u.uCol.value.setRGB(1, 1, 1).lerp(new THREE.Color(0x283246), sun.night * 0.85).lerp(new THREE.Color(0x9aa3ad), env.rain ? 0.5 : 0);
+      u.uCol.value.setRGB(1, 1, 1).lerp(new THREE.Color(0x9aa3ad), env.rain ? 0.5 : 0);
       u.uOff.value.set(((mercX(this.origin.lng) / this.s0) % 90000), ((-mercY(this.origin.lat) / this.s0) % 90000));
     }
 
@@ -585,7 +587,7 @@ export class SceneLayer implements CustomLayerInterface {
     this.renderer.render(this.scene, this.camera);
 
     // keep animating: wires, flow, clouds and time of day are always moving
-    if (animating || this.wires.size > 0 || this.clouds.visible || env.timeSpeed > 0 || this.structs.size > 0) map.triggerRepaint();
+    if (animating || this.wires.size > 0 || this.clouds.visible || this.structs.size > 0) map.triggerRepaint();
     void dt;
   }
 }

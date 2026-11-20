@@ -64,7 +64,8 @@ src/
   conductors/spanWires.ts   attachment matching (circuits, phases, bundles, OPGW) + tube geometry
   conductors/wireMaterial.ts shader: wind sway, energised glow, power-flow pulses, stringing animation
   network/connectivity.ts   graph search: energised islands, MW served, circuit-km, angle checks
-  map/MapView.tsx           map, terrain, sky/fog, day–night styling, 2D overview layers
+  map/MapView.tsx           map, terrain, sky/fog, weather styling, 2D overview layers
+  map/navigation.ts         Google Earth–style camera: shift-drag orbit, fly-to, keyboard, eye altitude
   map/sceneLayer.ts         Three.js layer: meshes, LOD, shadows, clouds, picking
   map/controller.ts         tools: build / connect / auto-route / move / bulldoze, ghosts, validation
   ui/                       toolbar, info panels, settings, welcome, rain overlay
@@ -73,8 +74,11 @@ src/
 ## What's in this prototype
 
 **Phase 1 — environment:** 3D terrain over the whole country, camera locked
-to the Philippines, top / isometric / ground-level views, region jump list,
-satellite/streets/topo basemaps, terrain exaggeration.
+to the Philippines, top / isometric / ground-level views,
+satellite/streets/topo basemaps, terrain exaggeration. The camera navigates like
+Google Earth: Shift/Ctrl/right-drag to orbit, a draggable compass, a 2D/3D toggle,
+place search (OpenStreetMap Nominatim, Philippines only, or typed coordinates),
+double-click fly-to, keyboard flight, and an eye-altitude status bar with a scale bar.
 
 **Phase 2 — placement:** 12 structure types: DC/SC suspension, angle, DC/SC
 dead-end, special crossing (aviation-banded), steel poles SC/DC, a 13.8 kV
@@ -95,11 +99,10 @@ places towers at the ruling span between two clicks.
 
 **Phase 4 — animation:** construction rise and conductor-stringing
 animations, wind sway with gusts, glow and moving power-flow pulses on
-energised lines, a day–night cycle that drives the sun, sky and basemap
-brightness, dynamic shadows on the terrain, a drifting cloud deck, and rain
-with lightning flashes.
+energised lines, a fixed late-morning sun with dynamic shadows on the
+terrain, a drifting cloud deck, and rain with lightning flashes.
 
-**Phase 5 — network:** generation (solar output follows the sun), substation
+**Phase 5 — network:** generation (solar output drops under rain), substation
 load, energised and de-energised states, circuit-km per voltage, and a
 line-angle compliance warning.
 

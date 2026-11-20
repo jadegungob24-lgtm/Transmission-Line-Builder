@@ -11,9 +11,6 @@ let idSeq = 0;
 const newId = (p: string) => `${p}${Date.now().toString(36)}${(idSeq++).toString(36)}`;
 
 export interface Env {
-  timeOfDay: number;
-  /** Game hours per real second. */
-  timeSpeed: number;
   wind: number;
   rain: boolean;
   clouds: boolean;
@@ -198,7 +195,7 @@ export const useStore = create<State>()((set, get) => ({
   ghostRot: null,
   showWelcome: true,
   env: {
-    timeOfDay: 9.5, timeSpeed: 0.02, wind: 0.35, rain: false, clouds: true, shadows: true,
+    wind: 0.35, rain: false, clouds: true, shadows: true,
     glow: true, flow: true, basemap: 'satellite', labels: true, exaggeration: 1,
   },
 
@@ -410,8 +407,12 @@ export interface Hud {
   lat: number;
   elev: number;
   zoom: number;
+  bearing: number;
+  pitch: number;
+  /** Camera eye altitude above sea level (m). */
+  alt: number;
   msg: string;
   ok: boolean;
   fps: number;
 }
-export const useHud = create<Hud>()(() => ({ lng: 0, lat: 0, elev: 0, zoom: 5, msg: '', ok: true, fps: 0 }));
+export const useHud = create<Hud>()(() => ({ lng: 0, lat: 0, elev: 0, zoom: 5, bearing: 0, pitch: 30, alt: 0, msg: '', ok: true, fps: 0 }));

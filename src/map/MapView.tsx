@@ -6,7 +6,8 @@ import { VOLTAGES } from '../catalog/voltages';
 import { PH_MAX_BOUNDS, PH_POLY, PH_VIEW_BOUNDS } from '../core/geo';
 import { useHud, useStore } from '../core/store';
 import { Controller } from './controller';
-import { skyColors, sunAt } from './environment';
+import { skyColors, SUN } from './environment';
+import { eyeAltitude, Navigation } from './navigation';
 import { runtime } from './runtime';
 import { SceneLayer } from './sceneLayer';
 
@@ -138,7 +139,10 @@ export function MapView() {
     layer.onFps = (fps) => useHud.setState({ fps });
     runtime.layer = layer;
 
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }), 'bottom-left');
+
     let ctrl: Controller | undefined;
+    let nav: Navigation | undefined;
     let ovTimer: number | undefined;
     const pushOverview = () => {
       window.clearTimeout(ovTimer);
@@ -153,30 +157,26 @@ export function MapView() {
     const applyEnv = () => {
       if (!map.isStyleLoaded()) return;
       const env = useStore.getState().env;
-      const sun = sunAt(env.timeOfDay);
-      const key = `${env.timeOfDay.toFixed(2)}|${env.rain}|${env.basemap}|${env.labels}|${env.exaggeration}`;
+      const key = `${env.rain}|${env.basemap}|${env.labels}|${env.exaggeration}`;
       if (key === lastEnv) return;
       const prev = lastEnv.split('|');
       lastEnv = key;
-      const c = skyColors(sun, env.rain);
+      const c = skyColors(env.rain);
       map.setSky({
         'sky-color': c.sky, 'horizon-color': c.horizon, 'fog-color': c.fog,
         'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.75,
         'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 8, 0.6, 12, 0],
       });
-      const day = 1 - sun.night;
-      const bright = (env.rain ? 0.7 : 1) * (0.22 + 0.78 * day);
       for (const id of ['sat', 'streets', 'topo']) {
         const want = env.basemap === 'satellite' ? 'sat' : env.basemap;
         map.setLayoutProperty(id, 'visibility', want === id ? 'visible' : 'none');
-        map.setPaintProperty(id, 'raster-brightness-max', bright);
-        map.setPaintProperty(id, 'raster-saturation', -0.55 * sun.night + (env.rain ? -0.25 : 0) + 0.12 * sun.golden);
+        map.setPaintProperty(id, 'raster-brightness-max', env.rain ? 0.7 : 1);
+        map.setPaintProperty(id, 'raster-saturation', env.rain ? -0.25 : 0);
       }
-      map.setPaintProperty('labels', 'raster-brightness-max', 0.5 + 0.5 * day);
       map.setLayoutProperty('labels', 'visibility', env.labels ? 'visible' : 'none');
-      map.setPaintProperty('hillshade', 'hillshade-illumination-direction', Math.round(sun.azimuth) % 360);
-      map.setPaintProperty('hillshade', 'hillshade-exaggeration', 0.2 + 0.25 * day);
-      if (prev[4] !== String(env.exaggeration)) map.setTerrain({ source: 'dem', exaggeration: env.exaggeration });
+      map.setPaintProperty('hillshade', 'hillshade-illumination-direction', SUN.azimuth);
+      map.setPaintProperty('hillshade', 'hillshade-exaggeration', 0.45);
+      if (prev[3] !== String(env.exaggeration)) map.setTerrain({ source: 'dem', exaggeration: env.exaggeration });
     };
 
     map.on('load', () => {
@@ -184,10 +184,21 @@ export function MapView() {
       map.addLayer(layer);
       ctrl = new Controller(map, layer);
       runtime.ctrl = ctrl;
+      nav = new Navigation(map, layer);
+      runtime.nav = nav;
       pushOverview();
       applyEnv();
     });
-    map.on('zoom', () => useHud.setState({ zoom: map.getZoom() }));
+    let camRaf = 0;
+    const updateCamera = () => {
+      if (camRaf) return;
+      camRaf = requestAnimationFrame(() => {
+        camRaf = 0;
+        useHud.setState({ zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(), alt: eyeAltitude(map) });
+      });
+    };
+    map.on('move', updateCamera);
+    map.on('load', updateCamera);
 
     const unsub = useStore.subscribe((s, p) => {
       if (s.spans !== p.spans || s.structures !== p.structures || s.network !== p.network) pushOverview();
@@ -196,11 +207,14 @@ export function MapView() {
 
     return () => {
       unsub();
+      cancelAnimationFrame(camRaf);
+      nav?.dispose();
       ctrl?.dispose();
       map.remove();
       runtime.map = undefined;
       runtime.layer = undefined;
       runtime.ctrl = undefined;
+      runtime.nav = undefined;
     };
   }, []);
 

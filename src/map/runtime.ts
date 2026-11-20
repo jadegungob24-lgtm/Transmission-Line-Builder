@@ -1,9 +1,10 @@
 import type { Map as MLMap } from 'maplibre-gl';
 import type { Controller } from './controller';
+import type { Navigation } from './navigation';
 import type { SceneLayer } from './sceneLayer';
 
 /** Live handles to the map systems, for UI code outside the React map component. */
-export const runtime: { map?: MLMap; layer?: SceneLayer; ctrl?: Controller } = {};
+export const runtime: { map?: MLMap; layer?: SceneLayer; ctrl?: Controller; nav?: Navigation } = {};
 if (import.meta.env.DEV) (window as unknown as { __rt: typeof runtime }).__rt = runtime;
 
 export type ViewMode = 'top' | 'iso' | 'ground';

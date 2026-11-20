@@ -2,62 +2,71 @@ import { useEffect, useState } from 'react';
 import { TRANSMISSION_VOLTAGES } from './catalog/voltages';
 import { useStore } from './core/store';
 import { MapView } from './map/MapView';
+import { northUp, resetTilt } from './map/navigation';
 import { runtime, setView } from './map/runtime';
+import { NavWidget } from './ui/NavWidget';
 import { Hud, InfoPanel, Rain, Settings, SideTools, TopBar, Welcome } from './ui/Panels';
+import { focusSearch } from './ui/Search';
 import { Toolbar } from './ui/Toolbar';
+
+// Keys that move the camera while held down (checked every frame).
+const HELD_KEYS = new Set([
+  'w', 'a', 's', 'd', 'q', 'e', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright',
+  '+', '=', '-', '_', 'pageup', 'pagedown',
+]);
 
 export default function App() {
   const [settings, setSettings] = useState(false);
   const showWelcome = useStore((s) => s.showWelcome);
   const set = useStore((s) => s.set);
 
-  // game clock
-  useEffect(() => {
-    let last = performance.now();
-    let acc = 0;
-    const t = window.setInterval(() => {
-      const now = performance.now();
-      const dt = (now - last) / 1000;
-      last = now;
-      const { env, setEnv } = useStore.getState();
-      if (!env.timeSpeed) return;
-      acc += dt * env.timeSpeed;
-      if (acc > 0.01) {
-        setEnv({ timeOfDay: (env.timeOfDay + acc) % 24 });
-        acc = 0;
-      }
-    }, 100);
-    return () => window.clearInterval(t);
-  }, []);
-
-  // keyboard shortcuts
   useEffect(() => {
     const held = new Set<string>();
+    let shift = false;
     let raf = 0;
-    const pan = () => {
-      const map = runtime.map;
-      if (map && held.size) {
-        const k = 12;
-        const dx = (held.has('d') || held.has('arrowright') ? k : 0) - (held.has('a') || held.has('arrowleft') ? k : 0);
-        const dy = (held.has('s') || held.has('arrowdown') ? k : 0) - (held.has('w') || held.has('arrowup') ? k : 0);
-        if (dx || dy) map.panBy([dx, dy], { duration: 0 });
-        const rot = (held.has('e') ? 1.5 : 0) - (held.has('q') ? 1.5 : 0);
-        if (rot) map.setBearing(map.getBearing() + rot);
+
+    const tick = () => {
+      const nav = runtime.nav;
+      if (nav && held.size) {
+        const has = (...k: string[]) => k.some((x) => held.has(x));
+        const PAN = 12;
+        const right = (has('d', 'arrowright') ? 1 : 0) - (has('a', 'arrowleft') ? 1 : 0);
+        const down = (has('s', 'arrowdown') ? 1 : 0) - (has('w', 'arrowup') ? 1 : 0);
+        let pan: [number, number] = [right * PAN, down * PAN];
+        let rotate = (has('e') ? 1.5 : 0) - (has('q') ? 1.5 : 0);
+        let tilt = 0;
+        if (shift) {
+          // Google Earth: Shift + arrows rotates (left/right) and tilts (up/down)
+          rotate += right * 1.5;
+          tilt = -down * 1.2;
+          pan = [0, 0];
+        }
+        const zoom = (has('+', '=', 'pageup') ? 0.035 : 0) - (has('-', '_', 'pagedown') ? 0.035 : 0);
+        nav.keyboardStep(pan, rotate, tilt, zoom);
       }
-      raf = requestAnimationFrame(pan);
+      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(pan);
+    raf = requestAnimationFrame(tick);
 
     const down = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).tagName === 'INPUT') return;
+      shift = e.shiftKey;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       const k = e.key.toLowerCase();
       const s = useStore.getState();
-      if (['w', 'a', 's', 'd', 'q', 'e', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) {
+
+      if ((e.ctrlKey || e.metaKey) && k === 'f') {
+        e.preventDefault();
+        focusSearch();
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (HELD_KEYS.has(k)) {
         held.add(k);
         e.preventDefault();
         return;
       }
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const map = runtime.map;
       switch (k) {
         case 'escape': runtime.ctrl?.cancel(); break;
         case 'r': runtime.ctrl?.rotate(e.shiftKey ? -15 : 15); break;
@@ -65,19 +74,21 @@ export default function App() {
         case 'm': s.setTool('move'); break;
         case 'x': s.setTool('bulldoze'); break;
         case 'c': s.setTool('connect'); break;
+        case 'n': if (map) northUp(map); break;
+        case 'u': if (map) resetTilt(map); break;
+        case '/': e.preventDefault(); focusSearch(); break;
         case '1': setView('top'); break;
         case '2': setView('iso'); break;
         case '3': setView('ground'); break;
-        case ' ': s.setEnv({ timeSpeed: s.env.timeSpeed ? 0 : 0.05 }); e.preventDefault(); break;
         case 'delete':
         case 'backspace':
           if (s.selected?.kind === 'structure') s.removeStructure(s.selected.id);
           else if (s.selected?.kind === 'span') s.removeSpan(s.selected.id);
           break;
-        case 'pageup':
-        case 'pagedown': {
+        case '[':
+        case ']': {
           const i = TRANSMISSION_VOLTAGES.indexOf(s.voltage);
-          const n = TRANSMISSION_VOLTAGES[Math.max(0, Math.min(TRANSMISSION_VOLTAGES.length - 1, i + (k === 'pageup' ? 1 : -1)))];
+          const n = TRANSMISSION_VOLTAGES[Math.max(0, Math.min(TRANSMISSION_VOLTAGES.length - 1, i + (k === ']' ? 1 : -1)))];
           s.setVoltage(n);
           break;
         }
@@ -88,8 +99,17 @@ export default function App() {
           }
       }
     };
-    const up = (e: KeyboardEvent) => held.delete(e.key.toLowerCase());
-    const blur = () => held.clear();
+    const up = (e: KeyboardEvent) => {
+      shift = e.shiftKey;
+      held.delete(e.key.toLowerCase());
+      // Shift changes e.key for some keys ('+' / '='), so release both forms
+      if (e.key === '=' || e.key === '+') { held.delete('='); held.delete('+'); }
+      if (e.key === '-' || e.key === '_') { held.delete('-'); held.delete('_'); }
+    };
+    const blur = () => {
+      held.clear();
+      shift = false;
+    };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', blur);
@@ -108,6 +128,7 @@ export default function App() {
       <TopBar onSettings={() => setSettings(true)} onHelp={() => set({ showWelcome: true })} />
       <SideTools />
       <InfoPanel />
+      <NavWidget />
       <Hud />
       <Toolbar />
       {settings && <Settings onClose={() => setSettings(false)} />}

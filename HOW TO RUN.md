@@ -101,12 +101,12 @@ Press **Ctrl + C** in the PowerShell window.
 
 ## Your first transmission line (2-minute tutorial)
 
-1. **Fly somewhere.** Click the **📍 pin** button on the left and choose a region, such as *Laguna de Bay*.
+1. **Fly somewhere.** Click the **search box** at the top (or press **/**). Pick a region such as *Laguna de Bay*, or type a town name and press **Enter**.
 2. **Place a power source.** Open **Other Infrastructure** in the bottom toolbar → **Power Plant** → click on land.
 3. **Pick a voltage.** Click **230 kV** on the right of the toolbar.
 4. **Build towers.** Open **Transmission Towers** → **DC Suspension**. Click the power plant to start from it, then click across the land. Each click places a tower and strings conductors from the previous one. Keep towers within about 500 m of each other; the preview turns red and tells you if a span is too long.
 5. **Finish at a substation.** Right-click to end the line. Open **Substations** → **Substation** and place it within about 500 m of your last tower. Then click your last tower; conductors are strung between them.
-6. **Watch it energise.** Lines connected to the power plant glow with moving power-flow pulses. Drag the **time slider** at the top toward evening to see them at night.
+6. **Watch it energise.** Lines connected to the power plant glow with moving power-flow pulses. Double-click a tower to fly in for a closer look.
 
 **Faster option:** open **Conductors** → **Auto Route · DC Lattice**, then click a start point and an end point. Towers are placed along the terrain automatically.
 
@@ -114,21 +114,42 @@ Press **Ctrl + C** in the PowerShell window.
 
 ## Controls
 
+The camera works like **Google Earth**, with a few extra city-builder shortcuts.
+
+**Camera**
+
+| Action | Control |
+|---|---|
+| Pan the map | **Left-drag**, **Middle-drag**, **W A S D** or **arrow keys** |
+| Rotate and tilt | **Right-drag**, **Shift + drag** or **Ctrl + drag** |
+| Rotate and tilt with keys | **Shift + arrow keys**, or **Q / E** to orbit |
+| Zoom toward the cursor | **Mouse wheel** |
+| Zoom with keys | **+ / −** or **Page Up / Page Down** (hold) |
+| Zoom in on a point | **Double-click** (Select tool) |
+| Fly to a structure | **Double-click** it (Select tool) |
+| Face north | **N**, or click the **compass** |
+| Look straight down | **U**, or click **3D** to switch to **2D** |
+| Rotate freely | **Drag the compass ring** |
+| Search for a place or coordinates | **/** or **Ctrl + F** |
+| Fly to the whole country | **⌂ home** button (bottom right) |
+| Top / isometric / ground view | **1 / 2 / 3** |
+
+**Building**
+
 | Action | Control |
 |---|---|
 | Place / select | **Left-click** |
 | Cancel / end the current line | **Right-click** or **Esc** |
-| Pan the map | **Left-drag**, **Middle-drag**, or **W A S D** |
-| Rotate and tilt the camera | **Right-drag**, or **Q / E** to orbit |
-| Zoom | **Mouse wheel** |
 | Rotate the structure being placed | **R** (clockwise) / **Shift + R** |
-| Top / isometric / ground view | **1 / 2 / 3** |
 | Select, move, bulldoze tools | **V / M / X** |
 | String conductors between existing structures | **C** |
 | Construction menus | **F1 – F5** |
-| Change voltage | **Page Up / Page Down** |
+| Change voltage | **[ / ]** |
 | Delete the selected item | **Delete** |
-| Pause / resume time | **Space** |
+
+The status bar at the bottom shows the cursor position, ground elevation, **eye altitude**, heading and tilt. A scale bar sits beside it.
+
+**Search tips:** type a city, town, barangay or landmark and press **Enter**; results come from OpenStreetMap and are limited to the Philippines. You can also type coordinates such as `14.58, 121.03`.
 
 > 3D towers appear once you zoom in past roughly city level. When zoomed out, the network shows as coloured lines on the map.
 

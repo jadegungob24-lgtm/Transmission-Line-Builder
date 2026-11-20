@@ -17,7 +17,7 @@ export const wireShared = {
 const VERT = /* glsl */ `
 attribute vec3 aSway;
 attribute vec3 aMisc;
-uniform float uTime, uWind, uMinRad;
+uniform float uTime, uWind, uMinRad, uDrop;
 varying float vT;
 varying float vKind;
 varying vec3 vN;
@@ -29,6 +29,8 @@ void main() {
   float phi = uWind * (0.20 + 0.10 * sin(uTime * 0.8 + ph) + 0.04 * sin(uTime * 2.1 + ph * 1.7))
             + 0.012 * sin(uTime * 1.7 + ph * 3.0);
   vec3 p = position + vec3(aSway.xy * sin(phi), aSway.z * (1.0 - cos(phi)));
+  // demolition: the wire goes slack and drops; ends stay at the attachments
+  p.z -= aSway.z * uDrop * 3.0 + uDrop * 4.0 * aMisc.x * (1.0 - aMisc.x) * 4.0;
   float r = max(mix(0.045, 0.03, vKind), uMinRad);
   p += normal * r;
   vN = normal;
@@ -37,7 +39,7 @@ void main() {
 
 const FRAG = /* glsl */ `
 uniform vec3 uColor, uSunDir;
-uniform float uState, uProgress, uTime, uLen, uNight, uGlow, uFlow, uSel, uSunI, uAmb;
+uniform float uState, uProgress, uTime, uLen, uNight, uGlow, uFlow, uSel, uSunI, uAmb, uFade;
 varying float vT;
 varying float vKind;
 varying vec3 vN;
@@ -61,7 +63,7 @@ void main() {
   }
   vec3 hi = uSel > 1.5 ? vec3(1.0, 0.25, 0.2) : vec3(1.0, 0.95, 0.35);
   col = mix(col, hi, min(uSel, 1.0) * 0.7);
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(col, uFade);
 }`;
 
 export function makeWireMaterial(color: string): THREE.ShaderMaterial {
@@ -76,6 +78,8 @@ export function makeWireMaterial(color: string): THREE.ShaderMaterial {
       uProgress: { value: 0 },
       uLen: { value: 300 },
       uSel: { value: 0 },
+      uFade: { value: 1 },
+      uDrop: { value: 0 },
     },
   });
 }

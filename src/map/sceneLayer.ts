@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import type { CustomLayerInterface, CustomRenderMethodInput, Map as MLMap } from 'maplibre-gl';
-import { getModel } from '../catalog/structures';
+import { DEF_BY_ID, getModel } from '../catalog/structures';
 import { VOLTAGES } from '../catalog/voltages';
 import { buildSpanGeometry, layoutSpan, SpanLayout, wireHeightAt } from '../conductors/spanWires';
 import { makeWireMaterial, wireShared } from '../conductors/wireMaterial';
 import { distanceM, LL, mercScale, mercX, mercY } from '../core/geo';
 import { useStore } from '../core/store';
 import type { Span, Structure } from '../core/types';
+import { Demolitions } from './demolition';
 import { SUN } from './environment';
 
 // Three.js scene rendered inside MapLibre's GL context as a custom layer.
@@ -20,6 +21,8 @@ const D2R = Math.PI / 180;
 const BUILD_MS = 650;
 const STRING_MS = 1100;
 const SHOW_3D_ZOOM = 10.3;
+/** More removals than this at once (Clear map, loading a file) skip the demolition animation. */
+const MAX_ANIMATED_REMOVALS = 40;
 
 export type Highlight = { kind: 'structure' | 'span'; id: string; mode: 'hover' | 'select' | 'delete' } | null;
 
@@ -82,6 +85,7 @@ export class SceneLayer implements CustomLayerInterface {
   private clouds: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
   private unsub: (() => void) | null = null;
   private tmpV = new THREE.Vector3();
+  private demolitions = new Demolitions(this.scene);
   private last = performance.now();
   private frames = 0;
   private fpsT = performance.now();
@@ -234,10 +238,26 @@ export class SceneLayer implements CustomLayerInterface {
       return null;
     };
 
+    // Removed structures and spans play a demolition animation, unless a lot
+    // disappear at once (Clear map, loading a file) or the 3D view is off.
+    const gone = [...this.structs.keys()].filter((id) => !structures[id]).length
+      + [...this.wires.keys()].filter((id) => !spans[id]).length;
+    const animateRemoval = gone > 0 && gone <= MAX_ANIMATED_REMOVALS && this.zoom >= SHOW_3D_ZOOM;
+    const now = performance.now();
+
     for (const [id, s] of this.structs) {
       if (!structures[id]) {
-        this.scene.remove(s.mesh);
-        if (s.glow) this.scene.remove(s.glow);
+        if (animateRemoval && s.mesh.userData.grow > 0) {
+          const m = getModel(s.st.defId, s.st.voltage);
+          s.mesh.geometry = m.geometry; // full detail, not the distance LOD
+          this.demolitions.addStructure(s.mesh, s.glow, {
+            lng: s.st.lng, lat: s.st.lat, elev: s.st.elev, heading: s.st.rotation,
+            height: s.height, radius: m.radius, topple: DEF_BY_ID[s.st.defId].role === 'line',
+          }, now);
+        } else {
+          this.scene.remove(s.mesh);
+          if (s.glow) this.scene.remove(s.glow);
+        }
         this.structs.delete(id);
       }
     }
@@ -272,9 +292,13 @@ export class SceneLayer implements CustomLayerInterface {
 
     for (const [id, w] of this.wires) {
       if (!spans[id]) {
-        this.scene.remove(w.mesh);
-        w.mesh.geometry.dispose();
-        w.mesh.material.dispose();
+        if (animateRemoval) {
+          this.demolitions.addWire(w.mesh, { lng: w.A.lng, lat: w.A.lat, elev: w.A.elev }, now);
+        } else {
+          this.scene.remove(w.mesh);
+          w.mesh.geometry.dispose();
+          w.mesh.material.dispose();
+        }
         this.wires.delete(id);
       }
     }
@@ -557,6 +581,13 @@ export class SceneLayer implements CustomLayerInterface {
       } else {
         u.uState.value = w.mesh.userData.energized ? 1 : 0;
       }
+    }
+    if (this.demolitions.active) {
+      const anchor = (lng: number, lat: number, elev: number, out: THREE.Vector3) => {
+        this.worldOf({ lng, lat }, elev, out);
+        return mercScale(lat) / this.s0;
+      };
+      if (this.demolitions.update(now, anchor, show3D)) animating = true;
     }
     this.ghostGroup.visible = show3D;
     this.ghostMeshes.forEach((m) => {

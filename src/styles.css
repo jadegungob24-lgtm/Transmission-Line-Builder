@@ -153,7 +153,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .lg.on { background: linear-gradient(90deg, #ff5a5f, #ffe7a0, #ff5a5f); box-shadow: 0 0 6px #ff5a5f; }
 .lg.off { background: #6f767d; }
 .lg.build { background: repeating-linear-gradient(90deg, #ffa21a 0 5px, #333 5px 10px); }
-.lg.row { height: 7px; background: rgba(255, 0, 0, 0.18); border-top: 1.5px dashed #ff0000; border-bottom: 1.5px dashed #ff0000; border-radius: 1px; }
+.lg.row { height: 7px; background: rgba(255, 0, 0, 0.1); border-top: 1px dashed rgba(255, 0, 0, 0.65); border-bottom: 1px dashed rgba(255, 0, 0, 0.65); border-radius: 1px; }
+.panel-toggles { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px; font-size: 12px; }
+.panel-toggles .toggle { padding: 3px 0; }
 .cl-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; font-size: 11px; color: var(--muted); }
 .cl-legend span { display: inline-flex; align-items: center; gap: 3px; }
 .cl-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; border: 1px solid rgba(255, 255, 255, 0.25); }

@@ -65,7 +65,7 @@ const style: StyleSpecification = {
       id: 'row-fill', type: 'fill', source: 'rowCorridor',
       paint: {
         'fill-color': ['get', 'color'],
-        'fill-opacity': 0.14,
+        'fill-opacity': 0.06,
       },
     },
     {
@@ -73,18 +73,18 @@ const style: StyleSpecification = {
       layout: { 'line-cap': 'butt', 'line-join': 'miter' },
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.2, 14, 2.0, 18, 2.6],
-        'line-dasharray': [5, 3],
-        'line-opacity': 0.88,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.75, 14, 1.0, 18, 1.25],
+        'line-dasharray': [2.5, 2.5],
+        'line-opacity': 0.55,
       },
     },
     {
       id: 'row-cl-casing', type: 'line', source: 'rowCenterline',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': 'rgba(0, 0, 0, 0.55)',
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 3.2, 14, 4.6, 18, 5.6],
-        'line-opacity': 0.85,
+        'line-color': 'rgba(0, 0, 0, 0.3)',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.8, 14, 2.4, 18, 2.8],
+        'line-opacity': 0.5,
       },
     },
     {
@@ -92,8 +92,8 @@ const style: StyleSpecification = {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.8, 14, 2.8, 18, 3.6],
-        'line-opacity': 1,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.1, 14, 1.5, 18, 1.9],
+        'line-opacity': 0.72,
       },
     },
     {
@@ -220,7 +220,7 @@ export function MapView() {
     const applyEnv = () => {
       if (!map.isStyleLoaded()) return;
       const env = useStore.getState().env;
-      const key = `${env.rain}|${env.basemap}|${env.labels}|${env.exaggeration}|${env.row}`;
+      const key = `${env.rain}|${env.basemap}|${env.labels}|${env.exaggeration}|${env.row}|${env.centerline}`;
       if (key === lastEnv) return;
       const prev = lastEnv.split('|');
       lastEnv = key;
@@ -238,10 +238,11 @@ export function MapView() {
       }
       map.setLayoutProperty('labels', 'visibility', env.labels ? 'visible' : 'none');
       const rowVis = env.row ? 'visible' : 'none';
+      const clVis = env.centerline ? 'visible' : 'none';
       map.setLayoutProperty('row-fill', 'visibility', rowVis);
       map.setLayoutProperty('row-line', 'visibility', rowVis);
-      map.setLayoutProperty('row-cl-casing', 'visibility', rowVis);
-      map.setLayoutProperty('row-cl', 'visibility', rowVis);
+      map.setLayoutProperty('row-cl-casing', 'visibility', clVis);
+      map.setLayoutProperty('row-cl', 'visibility', clVis);
       map.setPaintProperty('hillshade', 'hillshade-illumination-direction', SUN.azimuth);
       map.setPaintProperty('hillshade', 'hillshade-exaggeration', 0.45);
       if (prev[3] !== String(env.exaggeration)) map.setTerrain({ source: 'dem', exaggeration: env.exaggeration });

@@ -287,6 +287,8 @@ function AlignSection({ sel }: { sel: { kind: 'structure' | 'span'; id: string }
 
 function NetworkPanel() {
   const net = useStore((s) => s.network);
+  const env = useStore((s) => s.env);
+  const setEnv = useStore((s) => s.setEnv);
   const [open, setOpen] = useState(true);
   const rows = (Object.keys(VOLTAGES) as VoltageId[]).filter((v) => net.circuitKm[v]);
   const warnings = Object.keys(net.angleWarnings).length;
@@ -310,6 +312,10 @@ function NetworkPanel() {
               {warnings === 1 ? '1 structure exceeds its' : `${warnings} structures exceed their`} design line angle. Select it to see where.
             </p>
           )}
+          <div className="panel-toggles">
+            <Toggle label="ROW corridor" v={env.row} on={(v) => setEnv({ row: v })} />
+            <Toggle label="Centerline" v={env.centerline} on={(v) => setEnv({ centerline: v })} />
+          </div>
           <div className="legend">
             <span><i className="lg on" /> Energised</span>
             <span><i className="lg off" /> Not connected to a source</span>
@@ -647,6 +653,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         </div>
         <Toggle label="Place labels" v={env.labels} on={(v) => setEnv({ labels: v })} />
         <Toggle label="ROW corridor overlay (NGCP)" v={env.row} on={(v) => setEnv({ row: v })} />
+        <Toggle label="Alignment centerline" v={env.centerline} on={(v) => setEnv({ centerline: v })} />
         <label className="slider">Terrain exaggeration <b>×{env.exaggeration.toFixed(1)}</b>
           <input type="range" min={1} max={3} step={0.5} value={env.exaggeration} onChange={(e) => setEnv({ exaggeration: parseFloat(e.target.value) })} />
         </label>

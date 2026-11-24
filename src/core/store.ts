@@ -26,6 +26,8 @@ export interface Env {
   labels: boolean;
   /** Show NGCP Right-of-Way (ROW) corridor along tower alignments. */
   row: boolean;
+  /** Show NGCP voltage-colored centerline along tower alignments. */
+  centerline: boolean;
   exaggeration: number;
 }
 
@@ -350,7 +352,7 @@ export const useStore = create<State>()((set, get) => ({
   showWelcome: true,
   env: {
     wind: 0.35, rain: false, clouds: true, shadows: true,
-    glow: true, flow: true, orbit: true, basemap: 'satellite', labels: true, row: true, exaggeration: 1,
+    glow: true, flow: true, orbit: true, basemap: 'satellite', labels: true, row: true, centerline: true, exaggeration: 1,
   },
   projects: boot.projects,
   projectId: boot.projectId,

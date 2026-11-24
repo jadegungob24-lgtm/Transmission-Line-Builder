@@ -70,8 +70,8 @@ export function buildDwgBytes(
   const symLayer = addLayer(doc, 'TL_STRUCTURES_SYM', Color.cyan);
   const lblLayer = addLayer(doc, 'TL_LABELS', new Color(7));
   const spanLblLayer = addLayer(doc, 'TL_SPAN_LABELS', Color.lightGray);
-  const rowLayer = addLayer(doc, 'TL_ROW_CORRIDOR', Color.magenta);
-  const rowLblLayer = addLayer(doc, 'TL_ROW_LABELS', Color.magenta);
+  const rowLayer = addLayer(doc, 'TL_ROW_CORRIDOR', Color.cyan);
+  const rowLblLayer = addLayer(doc, 'TL_ROW_LABELS', Color.cyan);
   const noteLayer = addLayer(doc, 'TL_NOTES', Color.green);
 
   const lineLayers = new Map<VoltageId, Layer>();

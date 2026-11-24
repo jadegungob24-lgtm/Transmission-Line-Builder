@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DEF_BY_ID, insulatorRange, modelOf } from '../catalog/structures';
+import { DEF_BY_ID, defSupports, insulatorRange, modelOf, STRUCTURE_DEFS } from '../catalog/structures';
 import { VOLTAGES, VoltageId } from '../catalog/voltages';
 import { layoutSpan, wireHeightAt } from '../conductors/spanWires';
 import { makeCatenary, wireLength } from '../conductors/catenary';
@@ -140,6 +140,7 @@ export function InfoPanel() {
           </div>
         )}
         <NameRow st={st} />
+        <TypeRow st={st} editable={!moving} />
         <Row k="Status" v={net.energizedStructures.has(st.id) ? <span className="ok">● Energised</span> : <span className="muted">○ De-energised</span>} />
         {def.voltages !== 'any' && <Row k="Voltage class" v={<span style={{ color: VOLTAGES[st.voltage].color }}>{VOLTAGES[st.voltage].label}</span>} />}
         <Row k="Circuits" v={def.role === 'line' ? `${def.circuits}` : `${m.circuits.length} line bays`} />
@@ -336,6 +337,34 @@ function NetworkPanel() {
   );
 }
 
+/** Structure type: line structures can be switched to any other tower/pole type supporting the voltage class. */
+function TypeRow({ st, editable }: { st: Structure; editable: boolean }) {
+  const def = DEF_BY_ID[st.defId];
+  const options = useMemo(
+    () => (def.role === 'line' ? STRUCTURE_DEFS.filter((d) => d.role === 'line' && defSupports(d, st.voltage)) : []),
+    [def.role, st.voltage],
+  );
+  if (def.role !== 'line' || options.length < 2) return <Row k="Type" v={def.short} />;
+  return (
+    <div className="row type-row">
+      <span className="muted">Type</span>
+      <select
+        className="type-select"
+        disabled={!editable}
+        value={st.defId}
+        onChange={(e) => useStore.getState().changeStructureType(st.id, e.target.value)}
+        title="Change structure type"
+      >
+        {options.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.short}{d.maxAngle != null ? ` (≤${d.maxAngle}°)` : ''}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 /** Structure name: its automatic number (T-006) unless you give it one. Staged like other panel edits. */
 function NameRow({ st }: { st: Structure }) {
   const [edit, setEdit] = useState<string | null>(null);
@@ -527,7 +556,7 @@ function Coordinates({ id, lng, lat, editable }: { id: string; lng: number; lat:
   const c = formatPrs92(raw);
 
   const copy = () => {
-    navigator.clipboard?.writeText(`${c.zone}\n${c.northing}\n${c.easting}`).then(() => {
+    navigator.clipboard?.writeText(`${c.zone}\n${c.easting}\n${c.northing}`).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     }, () => {});
@@ -565,8 +594,8 @@ function Coordinates({ id, lng, lat, editable }: { id: string; lng: number; lat:
             {PTM_ZONES.map((z) => <option key={z.zone} value={z.zone}>PRS92 · PTM Zone {z.roman}</option>)}
           </select>
         </div>
-        <label>N <input autoFocus inputMode="decimal" value={edit.n} onChange={(ev) => setEdit({ ...edit, n: ev.target.value })} onKeyDown={onKey} /> m</label>
-        <label>E <input inputMode="decimal" value={edit.e} onChange={(ev) => setEdit({ ...edit, e: ev.target.value })} onKeyDown={onKey} /> m</label>
+        <label>E <input autoFocus inputMode="decimal" value={edit.e} onChange={(ev) => setEdit({ ...edit, e: ev.target.value })} onKeyDown={onKey} /> m</label>
+        <label>N <input inputMode="decimal" value={edit.n} onChange={(ev) => setEdit({ ...edit, n: ev.target.value })} onKeyDown={onKey} /> m</label>
         {err && <p className="bad small">{err}</p>}
         <div className="info-actions">
           <button className="primary" onClick={apply} disabled={busy}>{busy ? 'Moving…' : 'Move here'}</button>
@@ -584,8 +613,8 @@ function Coordinates({ id, lng, lat, editable }: { id: string; lng: number; lat:
       </span>
       <button className={`coord${editable ? ' editable' : ''}`} onClick={open} title={editable ? 'Click to type new coordinates' : 'Updating live while moving'}>
         <span className="coord-zone">{c.zone}</span>
-        <span>{c.northing}</span>
         <span>{c.easting}</span>
+        <span>{c.northing}</span>
       </button>
     </div>
   );

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DEF_BY_ID, getModel } from '../catalog/structures';
+import { DEF_BY_ID, defSupports, getModel, insulatorRange } from '../catalog/structures';
 import { VOLTAGES, VoltageId } from '../catalog/voltages';
 import { computeNetwork, neighbours, NetworkInfo } from '../network/connectivity';
 import { bearingDeg, distanceM, enuOffset, LL, offsetLL } from './geo';
@@ -58,6 +58,10 @@ interface State {
   cancelEdit: () => void;
   /** Rename right away (schedule table), outside any pending info-panel edit. */
   renameStructure: (id: string, name: string) => void;
+  /** Change a line structure's tower/pole type. Pass immediate=true from the schedule table. */
+  changeStructureType: (id: string, defId: string, immediate?: boolean) => void;
+  /** Commit the current position/rotation of a structure (and its neighbours) into any active edit base. */
+  commitScheduleEdit: (id: string) => void;
   movingId: string | null;
   moveOrigin: { lng: number; lat: number; rotation: number } | null;
   autoConnect: boolean;
@@ -273,8 +277,8 @@ export function nameProblem(id: string, name: string): string | null {
 }
 
 /** Fields an info-panel edit can change; Cancel puts these back. */
-const EDIT_FIELDS = ['lng', 'lat', 'elev', 'rotation', 'manualRot', 'insLen', 'name'] as const;
-const DIRTY_FIELDS = ['lng', 'lat', 'rotation', 'manualRot', 'insLen', 'name'] as const;
+const EDIT_FIELDS = ['defId', 'lng', 'lat', 'elev', 'rotation', 'manualRot', 'insLen', 'name'] as const;
+const DIRTY_FIELDS = ['defId', 'lng', 'lat', 'rotation', 'manualRot', 'insLen', 'name'] as const;
 
 function changedIds(base: Record<string, Structure>, now: Record<string, Structure>): string[] {
   if (base === now) return [];
@@ -343,6 +347,31 @@ export const useStore = create<State>()((set, get) => ({
     const structures = { ...s.structures, [id]: { ...st, name: v } };
     const edit = s.edit && s.edit.base[id] ? { id: s.edit.id, base: { ...s.edit.base, [id]: { ...s.edit.base[id], name: v } } } : s.edit;
     set({ structures, edit });
+  },
+  changeStructureType: (id, defId, immediate = false) => {
+    const s = get();
+    const st = s.structures[id];
+    const def = DEF_BY_ID[defId];
+    if (!st || !def || def.role !== 'line' || !defSupports(def, st.voltage) || st.defId === defId) return;
+    const range = insulatorRange(defId, st.voltage);
+    let insLen = st.insLen;
+    if (!range || (insLen != null && (insLen < range.min - 1e-9 || insLen > range.max + 1e-9))) insLen = undefined;
+    const next: Structure = { ...st, defId, insLen };
+    const structures = { ...s.structures, [id]: next };
+    const edit = immediate && s.edit && s.edit.base[id]
+      ? { id: s.edit.id, base: { ...s.edit.base, [id]: { ...s.edit.base[id], defId, insLen } } }
+      : s.edit;
+    set({ structures, network: computeNetwork(structures, s.spans), edit });
+  },
+  commitScheduleEdit: (id) => {
+    const s = get();
+    if (!s.edit) return;
+    const ids = [id, ...neighbours(id, s.spans).map((n) => n.other)];
+    const base = { ...s.edit.base };
+    for (const k of ids) {
+      if (s.structures[k] && base[k]) base[k] = { ...s.structures[k] };
+    }
+    set({ edit: { id: s.edit.id, base } });
   },
   movingId: null,
   moveOrigin: null,

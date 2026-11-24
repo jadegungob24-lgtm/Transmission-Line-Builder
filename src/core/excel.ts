@@ -545,7 +545,7 @@ function buildReferenceSheet(
 
   const data: SheetData = [
     [
-      'No.', 'Structure type', 'Voltage', 'ROW (±m)', 'PRS92 zone', 'Northing (m)', 'Easting (m)',
+      'No.', 'Structure type', 'Voltage', 'ROW (±m)', 'PRS92 zone', 'Easting (m)', 'Northing (m)',
       'Latitude (°)', 'Longitude (°)', 'Ground elev. (m)', 'Height (m)', 'Insulator (m)',
       'Heading (°)', 'Line angle (°)', 'Connected to', 'Remarks',
     ].map(head),
@@ -568,8 +568,8 @@ function buildReferenceSheet(
         strCell(def.voltages === 'any' ? '—' : vSpec.label),
         def.voltages === 'any' ? strCell('—') : numCell(vSpec.rowHalfWidthM, '0.0', { align: 'center' }),
         strCell(`PTM Zone ${c.zone.roman}`),
-        numCell(c.northing, '#,##0.000'),
         numCell(c.easting, '#,##0.000'),
+        numCell(c.northing, '#,##0.000'),
         numCell(st.lat, '0.000000'),
         numCell(st.lng, '0.000000'),
         numCell(st.elev / ex, '0.0'),

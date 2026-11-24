@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import writeXlsxFile from 'write-excel-file/browser';
-import { DEF_BY_ID, insulatorRange, modelOf } from '../catalog/structures';
+import { DEF_BY_ID, defSupports, insulatorRange, modelOf, STRUCTURE_DEFS } from '../catalog/structures';
 import { VOLTAGES } from '../catalog/voltages';
 import { distanceM } from '../core/geo';
 import { buildNgcpWorkbookSheets } from '../core/excel';
 import { buildKmz } from '../core/kmz';
-import { toPrs92 } from '../core/prs92';
+import { fromPrs92, toPrs92 } from '../core/prs92';
 import { autoTag, MAX_NAME, nameProblem, structureTag, useStore } from '../core/store';
 import type { Span, Structure } from '../core/types';
 import { angleRemark, lineAngle, neighbours } from '../network/connectivity';
@@ -20,8 +20,9 @@ export interface ScheduleRow {
   type: string;
   voltage: string;
   zone: string;
-  northing: number;
+  zoneNum: number;
   easting: number;
+  northing: number;
   lat: number;
   lng: number;
   elev: number;
@@ -53,8 +54,9 @@ export function scheduleRows(structures: Record<string, Structure>, spans: Recor
         type: def.name,
         voltage: def.voltages === 'any' ? '—' : VOLTAGES[st.voltage].label,
         zone: `PTM Zone ${c.zone.roman}`,
-        northing: c.northing,
+        zoneNum: c.zone.zone,
         easting: c.easting,
+        northing: c.northing,
         lat: st.lat,
         lng: st.lng,
         elev: st.elev / (exaggeration || 1),
@@ -128,6 +130,8 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [nameErr, setNameErr] = useState<string | null>(null);
+  const [coordEdit, setCoordEdit] = useState<{ id: string; zone: number; e: string; n: string; focus: 'e' | 'n' } | null>(null);
+  const [coordBusy, setCoordBusy] = useState(false);
   const saveName = () => {
     if (!renaming) return;
     const problem = nameProblem(renaming.id, renaming.name);
@@ -135,6 +139,27 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
     useStore.getState().renameStructure(renaming.id, renaming.name);
     setNameErr(null);
     setRenaming(null);
+  };
+  const startCoordEdit = (r: ScheduleRow, focusField: 'e' | 'n', e: React.MouseEvent) => {
+    e.stopPropagation();
+    setNameErr(null);
+    setRenaming(null);
+    setCoordEdit({ id: r.id, zone: r.zoneNum, e: r.easting.toFixed(3), n: r.northing.toFixed(3), focus: focusField });
+  };
+  const saveCoord = async () => {
+    if (!coordEdit || coordBusy) return;
+    const eVal = parseFloat(coordEdit.e.replace(/[,\s]/g, ''));
+    const nVal = parseFloat(coordEdit.n.replace(/[,\s]/g, ''));
+    if (!isFinite(eVal) || !isFinite(nVal)) return setNameErr('Enter valid numbers for Easting and Northing');
+    if (eVal < 100000 || eVal > 900000 || nVal < 400000 || nVal > 2400000) return setNameErr('Those coordinates are outside the PTM zone range');
+    const p = fromPrs92(coordEdit.zone, nVal, eVal);
+    setCoordBusy(true);
+    setNameErr(null);
+    const problem = runtime.ctrl ? await runtime.ctrl.relocate(coordEdit.id, p) : 'Map not ready';
+    setCoordBusy(false);
+    if (problem) return setNameErr(problem);
+    useStore.getState().commitScheduleEdit(coordEdit.id);
+    setCoordEdit(null);
   };
 
   const focus = (r: ScheduleRow, e: React.MouseEvent) => {
@@ -193,18 +218,23 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
           <table>
             <thead>
               <tr>
-                <th>No.</th><th>Type</th><th>Voltage</th><th>Zone</th><th className="r">Northing (m)</th><th className="r">Easting (m)</th>
+                <th>No.</th><th>Type</th><th>Voltage</th><th>Zone</th><th className="r">Easting (m)</th><th className="r">Northing (m)</th>
                 <th className="r">Elev. (m)</th><th className="r">Height (m)</th><th className="r">Insulator (m)</th><th className="r">Heading</th><th className="r">Angle</th><th>Connected to</th><th>Remarks</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {rows.map((r) => {
+                const st = structures[r.id];
+                const def = DEF_BY_ID[st.defId];
+                const typeOpts = def.role === 'line' ? STRUCTURE_DEFS.filter((d) => d.role === 'line' && defSupports(d, st.voltage)) : [];
+                const editingCoord = coordEdit?.id === r.id;
+                return (
                 <tr key={r.id} className={r.id === activeId ? 'on' : multi.includes(r.id) ? 'multi' : ''} onClick={(e) => focus(r, e)} title="Click to select and fly to it · Ctrl+click to select several">
                   <td className="name-cell" onClick={(e) => renaming?.id === r.id && e.stopPropagation()}>
                     {renaming?.id === r.id ? (
                       <span className="sched-rename">
                         <input
-                          autoFocus maxLength={MAX_NAME} placeholder={autoTag(structures[r.id])} value={renaming.name}
+                          autoFocus maxLength={MAX_NAME} placeholder={autoTag(st)} value={renaming.name}
                           onChange={(e) => setRenaming({ id: r.id, name: e.target.value })}
                           onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setRenaming(null); }}
                           onBlur={saveName}
@@ -215,16 +245,71 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
                         <b>{r.tag}</b>
                         <button
                           className="rename-btn" title="Rename"
-                          onClick={(e) => { e.stopPropagation(); setNameErr(null); setRenaming({ id: r.id, name: structures[r.id].name ?? '' }); }}
+                          onClick={(e) => { e.stopPropagation(); setNameErr(null); setCoordEdit(null); setRenaming({ id: r.id, name: st.name ?? '' }); }}
                         >✎</button>
                       </>
                     )}
                   </td>
-                  <td>{DEF_BY_ID[structures[r.id].defId].short}</td>
+                  <td className="type-cell" onClick={(e) => typeOpts.length > 1 && e.stopPropagation()}>
+                    {typeOpts.length > 1 ? (
+                      <select
+                        className="sched-type"
+                        value={st.defId}
+                        onChange={(e) => useStore.getState().changeStructureType(r.id, e.target.value, true)}
+                        title="Change structure type"
+                      >
+                        {typeOpts.map((d) => (
+                          <option key={d.id} value={d.id}>{d.short}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      def.short
+                    )}
+                  </td>
                   <td>{r.voltage}</td>
                   <td>{r.zone.replace('PTM Zone ', '')}</td>
-                  <td className="r">{f3(r.northing)}</td>
-                  <td className="r">{f3(r.easting)}</td>
+                  <td
+                    className={`r coord-cell${editingCoord ? ' editing' : ''}`}
+                    onClick={(e) => (editingCoord ? e.stopPropagation() : startCoordEdit(r, 'e', e))}
+                    title="Click to edit Easting & Northing"
+                  >
+                    {editingCoord ? (
+                      <input
+                        className="sched-coord-input"
+                        autoFocus={coordEdit.focus === 'e'}
+                        inputMode="decimal"
+                        disabled={coordBusy}
+                        value={coordEdit.e}
+                        onChange={(e) => setCoordEdit({ ...coordEdit, e: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveCoord(); if (e.key === 'Escape') { setCoordEdit(null); setNameErr(null); } }}
+                      />
+                    ) : (
+                      <span className="coord-val">{f3(r.easting)}</span>
+                    )}
+                  </td>
+                  <td
+                    className={`r coord-cell${editingCoord ? ' editing' : ''}`}
+                    onClick={(e) => (editingCoord ? e.stopPropagation() : startCoordEdit(r, 'n', e))}
+                    title="Click to edit Easting & Northing"
+                  >
+                    {editingCoord ? (
+                      <span className="sched-coord-wrap">
+                        <input
+                          className="sched-coord-input"
+                          autoFocus={coordEdit.focus === 'n'}
+                          inputMode="decimal"
+                          disabled={coordBusy}
+                          value={coordEdit.n}
+                          onChange={(e) => setCoordEdit({ ...coordEdit, n: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveCoord(); if (e.key === 'Escape') { setCoordEdit(null); setNameErr(null); } }}
+                        />
+                        <button className="coord-act ok" disabled={coordBusy} onClick={saveCoord} title="Apply coordinates (Enter)">✓</button>
+                        <button className="coord-act" disabled={coordBusy} onClick={() => { setCoordEdit(null); setNameErr(null); }} title="Cancel (Esc)">×</button>
+                      </span>
+                    ) : (
+                      <span className="coord-val">{f3(r.northing)}</span>
+                    )}
+                  </td>
                   <td className="r">{r.elev.toFixed(0)}</td>
                   <td className="r">{r.height.toFixed(1)}</td>
                   <td className="r">{r.insulator == null ? '—' : r.insulator.toFixed(2)}</td>
@@ -233,7 +318,8 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
                   <td className="links">{r.links}</td>
                   <td className="remark-cell">{r.remark ? <span className="bad">⚠ {r.remark}</span> : <span className="muted">—</span>}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

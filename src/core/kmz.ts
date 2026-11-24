@@ -17,20 +17,22 @@ function kmlColor(hex: string, alpha = 'ff') {
   return `${alpha}${h.slice(4, 6)}${h.slice(2, 4)}${h.slice(0, 2)}`;
 }
 
-const ICON = 'http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png';
+const ICON = 'http://maps.google.com/mapfiles/kml/shapes/placemark_square.png';
 const STATION_ICON = 'http://maps.google.com/mapfiles/kml/shapes/square.png';
+const TOWER_PIN_COLOR = '#FF0000';
+const ROW_COLOR = '#00FFFF';
 
 export function buildKml(project: string, structures: Record<string, Structure>, spans: Record<string, Span>, exaggeration: number): string {
   const list = Object.values(structures).sort((a, b) => (a.no ?? 0) - (b.no ?? 0));
   const styles: string[] = [];
   for (const v of Object.values(VOLTAGES)) {
     styles.push(
-      `<Style id="t-${v.id}"><IconStyle><color>${kmlColor(v.centerlineColor)}</color><scale>1.1</scale><Icon><href>${ICON}</href></Icon></IconStyle>` +
+      `<Style id="t-${v.id}"><IconStyle><color>${kmlColor(TOWER_PIN_COLOR)}</color><scale>0.9</scale><Icon><href>${ICON}</href></Icon></IconStyle>` +
         `<LabelStyle><scale>0.8</scale></LabelStyle></Style>`,
-      `<Style id="l-${v.id}"><LineStyle><color>${kmlColor(v.centerlineColor)}</color><width>3</width></LineStyle></Style>`,
-      `<Style id="cl-${v.id}"><LineStyle><color>${kmlColor(v.centerlineColor)}</color><width>3.5</width></LineStyle></Style>`,
-      `<Style id="row-${v.id}"><LineStyle><color>${kmlColor(v.centerlineColor, 'ee')}</color><width>2.2</width></LineStyle>` +
-        `<PolyStyle><color>${kmlColor(v.centerlineColor, '38')}</color><outline>1</outline></PolyStyle></Style>`,
+      `<Style id="l-${v.id}"><LineStyle><color>${kmlColor(v.centerlineColor)}</color><width>0.8</width></LineStyle></Style>`,
+      `<Style id="cl-${v.id}"><LineStyle><color>${kmlColor(v.centerlineColor)}</color><width>0.8</width></LineStyle></Style>`,
+      `<Style id="row-${v.id}"><LineStyle><color>${kmlColor(ROW_COLOR, 'ff')}</color><width>0.8</width></LineStyle>` +
+        `<PolyStyle><color>${kmlColor(ROW_COLOR, '26')}</color><outline>1</outline></PolyStyle></Style>`,
     );
   }
   styles.push(

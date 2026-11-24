@@ -306,6 +306,7 @@ kbd { background: #26364a; border: 1px solid #3b4f66; border-bottom-width: 2px; 
 .ins-note .small { margin: 0; font-size: 11px; }
 button.link { background: none; border: 0; padding: 0; color: var(--accent); font-size: 11px; text-decoration: underline; }
 .schedule-actions .primary.earth { background: #2b6cb0; border-color: #3b82c4; }
+.schedule-actions .primary.cad { background: #b85d19; border-color: #d97324; }
 
 /* multi-selection */
 .multi-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; max-height: 120px; overflow: auto; }

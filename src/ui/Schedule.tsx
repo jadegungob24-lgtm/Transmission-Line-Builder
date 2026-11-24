@@ -129,6 +129,22 @@ export function exportKmz() {
   window.setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+/** Download the current project's structures and spans as an AutoCAD .dwg (PRS92 / PTM coordinates). */
+export async function exportDwg() {
+  const s = useStore.getState();
+  const project = s.projects.find((p) => p.id === s.projectId)?.name ?? 'Project';
+  const { buildDwg } = await import('../core/dwg');
+  const blob = buildDwg(project, s.structures, s.spans, s.env.exaggeration);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${safeName(project)}.dwg`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 const f3 = (v: number) => v.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
 export function SchedulePanel({ onClose }: { onClose: () => void }) {
@@ -141,6 +157,7 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
   const project = useStore((s) => s.projects.find((p) => p.id === s.projectId)?.name ?? '');
   const rows = useMemo(() => scheduleRows(structures, spans, ex), [structures, spans, ex]);
   const [busy, setBusy] = useState(false);
+  const [dwgBusy, setDwgBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [nameErr, setNameErr] = useState<string | null>(null);
@@ -170,6 +187,16 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
     }
     setBusy(false);
   };
+  const doExportDwg = async () => {
+    setDwgBusy(true);
+    setErr(null);
+    try {
+      await exportDwg();
+    } catch {
+      setErr('DWG export failed. Please try again.');
+    }
+    setDwgBusy(false);
+  };
   const activeId = movingId ?? (selected?.kind === 'structure' ? selected.id : null);
 
   return (
@@ -182,6 +209,9 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
           </button>
           <button className="primary earth" onClick={exportKmz} disabled={rows.length === 0} title="Download pins for every structure (and the lines) as a Google Earth .kmz">
             Export to Google Earth
+          </button>
+          <button className="primary cad" onClick={doExportDwg} disabled={dwgBusy || rows.length === 0} title="Download structures and lines with PRS92 / PTM coordinates as an AutoCAD .dwg">
+            {dwgBusy ? 'Exporting…' : 'Export to DWG'}
           </button>
           <button className="x" onClick={onClose} title="Close">×</button>
         </div>

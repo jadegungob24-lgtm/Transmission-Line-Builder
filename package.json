@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@node-projects/acad-ts": "^3.9.0",
     "maplibre-gl": "^5.6.0",
     "proj4": "^2.15.0",
     "react": "^18.3.1",

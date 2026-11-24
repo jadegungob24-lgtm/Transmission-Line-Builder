@@ -345,7 +345,7 @@ function solarFarm(): BuiltModel {
 // ---------------------------------------------------------------- registry
 
 const HV: VoltageId[] = TRANSMISSION_VOLTAGES;
-const SUBTRANS: VoltageId[] = ['v69', 'v115', 'v138'];
+const SUBTRANS: VoltageId[] = ['v34', 'v69', 'v115', 'v138'];
 
 export const STRUCTURE_DEFS: StructureDef[] = [
   {
@@ -397,9 +397,9 @@ export const STRUCTURE_DEFS: StructureDef[] = [
     build: (v, ins) => steelPole(v, 2, ins),
   },
   {
-    id: 'pole-dist', name: 'Distribution Pole (13.8 kV)', short: 'Dist. Pole', category: 'pole', icon: 'dist',
+    id: 'pole-dist', name: 'Distribution Pole (13.8–34.5 kV)', short: 'Dist. Pole', category: 'pole', icon: 'dist',
     description: 'Concrete distribution pole with crossarm, pin insulators, neutral and a pole-mounted transformer.',
-    voltages: ['v13'], role: 'line', circuits: 1, spanFactor: 1, maxAngle: 15,
+    voltages: ['v13', 'v34'], role: 'line', circuits: 1, spanFactor: 1, maxAngle: 15,
     insDefault: () => 0.33,
     build: (_v, ins) => distributionPole(ins),
   },

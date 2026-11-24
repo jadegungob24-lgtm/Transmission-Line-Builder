@@ -109,7 +109,7 @@ const style: StyleSpecification = {
       id: 'ov-lines', type: 'line', source: 'ovLines',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': ['case', ['get', 'on'], ['get', 'color'], '#8a929b'],
+        'line-color': ['case', ['get', 'on'], ['get', 'color'], '#ADADAD'],
         'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.4, 11, 3],
         'line-opacity': ['interpolate', ['linear'], ['zoom'], 5, 1, 11, 0.9, 12.5, 0],
       },

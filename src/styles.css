@@ -180,9 +180,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tab.on { color: var(--text); background: rgba(22, 34, 48, 0.95); box-shadow: inset 0 2px 0 var(--accent); }
 .volts { display: flex; gap: 3px; align-items: center; background: var(--bg); padding: 4px 6px; border-radius: 8px 8px 0 0; border: 1px solid var(--line); border-bottom: 0; }
 .volts span { margin-right: 4px; font-size: 11px; }
-.volt { background: rgba(0, 0, 0, 0.25); border: 1px solid transparent; border-radius: 5px; padding: 3px 7px; font-size: 11.5px; border-left: 3px solid var(--vc); }
-.volt.on { background: var(--vc); color: #071018; font-weight: 700; }
+.volt { background: rgba(0, 0, 0, 0.25); border: 1px solid transparent; border-radius: 5px; padding: 3px 7px; font-size: 11.5px; border-left: 3px solid var(--vc); white-space: nowrap; }
+.volt.on { background: var(--vc); color: var(--vt, #071018); font-weight: 700; }
 .volt:disabled { opacity: 0.25; cursor: not-allowed; }
+.v-badge { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 11.5px; font-weight: 700; line-height: 1.4; }
 .cards { display: flex; gap: 8px; padding: 10px; border-top-left-radius: 0; align-items: stretch; overflow-x: auto; }
 .card {
   width: 100px; flex: none; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;

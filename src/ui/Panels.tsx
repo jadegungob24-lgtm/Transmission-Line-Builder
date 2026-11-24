@@ -142,7 +142,16 @@ export function InfoPanel() {
         <NameRow st={st} />
         <TypeRow st={st} editable={!moving} />
         <Row k="Status" v={net.energizedStructures.has(st.id) ? <span className="ok">● Energised</span> : <span className="muted">○ De-energised</span>} />
-        {def.voltages !== 'any' && <Row k="Voltage class" v={<span style={{ color: VOLTAGES[st.voltage].color }}>{VOLTAGES[st.voltage].label}</span>} />}
+        {def.voltages !== 'any' && (
+          <Row
+            k="Voltage class"
+            v={
+              <span className="v-badge" style={{ background: VOLTAGES[st.voltage].color, color: VOLTAGES[st.voltage].textColor }}>
+                {VOLTAGES[st.voltage].label}
+              </span>
+            }
+          />
+        )}
         <Row k="Circuits" v={def.role === 'line' ? `${def.circuits}` : `${m.circuits.length} line bays`} />
         <Row k="Height" v={`${m.height.toFixed(1)} m`} />
         <InsulatorRow st={st} />
@@ -213,7 +222,7 @@ function SpanInfo({ id }: { id: string }) {
   const V = VOLTAGES[sp.voltage];
   const nPhase = data.lay.wires.filter((w) => w.kind === 0).length;
   const nGW = data.lay.wires.length - nPhase;
-  const minClear = V.kv >= 500 ? 12 : V.kv >= 230 ? 9 : V.kv >= 69 ? 7 : 6;
+  const minClear = V.kv >= 500 ? 12 : V.kv >= 350 ? 10.5 : V.kv >= 230 ? 9 : V.kv >= 69 ? 7 : 6;
   return (
     <div className="info panel">
       <div className="info-head">
@@ -304,7 +313,11 @@ function NetworkPanel() {
           <Row k="Route length" v={`${net.routeKm.toFixed(2)} km`} />
           {rows.length === 0 && <p className="muted small">No lines yet. Open Transmission Towers below, pick a tower and click on land to start a line.</p>}
           {rows.map((v) => (
-            <Row key={v} k={<span style={{ color: VOLTAGES[v].color }}>■ {VOLTAGES[v].label}</span>} v={`${net.circuitKm[v].toFixed(2)} ckm`} />
+            <Row
+              key={v}
+              k={<span><i className="cl-dot" style={{ background: VOLTAGES[v].color, marginRight: 5 }} />{VOLTAGES[v].label}</span>}
+              v={`${net.circuitKm[v].toFixed(2)} ckm`}
+            />
           ))}
           <Row k="Installed capacity" v={`${net.capacityMW} MW`} />
           <Row k="Connected load" v={`${net.loadMW} MW`} />
@@ -323,7 +336,7 @@ function NetworkPanel() {
             <span><i className="lg build" /> Stringing</span>
             <span><i className="lg row" /> Centerline &amp; ROW corridor</span>
             <div className="cl-legend">
-              {(['v500', 'v230', 'v138', 'v115', 'v69', 'v13'] as VoltageId[]).map((v) => (
+              {(['v500', 'v350', 'v230', 'v138', 'v115', 'v69', 'v34', 'v13'] as VoltageId[]).map((v) => (
                 <span key={v} title={`${VOLTAGES[v].label}: ${VOLTAGES[v].centerlineColor} · ±${VOLTAGES[v].rowHalfWidthM} m ROW`}>
                   <i className="cl-dot" style={{ background: VOLTAGES[v].centerlineColor }} />
                   {VOLTAGES[v].label.replace(' kV', '')}

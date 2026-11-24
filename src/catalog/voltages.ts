@@ -1,14 +1,16 @@
 // Voltage classes. Every tower builder and conductor rule reads its dimensions
 // from here, so adding a class is one entry in this table.
 
-export type VoltageId = 'v13' | 'v69' | 'v115' | 'v138' | 'v230' | 'v500';
+export type VoltageId = 'v13' | 'v34' | 'v69' | 'v115' | 'v138' | 'v230' | 'v350' | 'v500';
 
 export interface VoltageSpec {
   id: VoltageId;
   kv: number;
   label: string;
-  /** Map / UI colour for this class. */
+  /** Official NGCP colour code (hex) for tabs, lines, and UI accents. */
   color: string;
+  /** Contrasting text colour on a solid `color` background (e.g. active voltage tab). */
+  textColor: string;
   /** Vertical spacing between crossarm levels (m). */
   vSpacing: number;
   /** Tower centre to phase attachment (m). */
@@ -36,35 +38,45 @@ export interface VoltageSpec {
 
 export const VOLTAGES: Record<VoltageId, VoltageSpec> = {
   v13: {
-    id: 'v13', kv: 13.8, label: '13.8 kV', color: '#9aa7b4', vSpacing: 1, armLen: 1.1, insLen: 0.3,
+    id: 'v13', kv: 13.8, label: '13.8 kV', color: '#00FF00', textColor: '#071018', vSpacing: 1, armLen: 1.1, insLen: 0.3,
     bundle: 1, baseHeight: 10, baseWidth: 0.4, maxSpan: 90, minSpan: 15, catenaryC: 350,
     conductor: '1 × 336.4 MCM ACSR', groundWires: 1, rowHalfWidthM: 5, centerlineColor: '#00FF00',
   },
+  v34: {
+    id: 'v34', kv: 34.5, label: '34.5 kV', color: '#006400', textColor: '#ffffff', vSpacing: 1.5, armLen: 1.5, insLen: 0.6,
+    bundle: 1, baseHeight: 12.5, baseWidth: 0.6, maxSpan: 180, minSpan: 25, catenaryC: 750,
+    conductor: '1 × 336.4 MCM ACSR', groundWires: 1, rowHalfWidthM: 10, centerlineColor: '#006400',
+  },
   v69: {
-    id: 'v69', kv: 69, label: '69 kV', color: '#b07cff', vSpacing: 2.4, armLen: 2.3, insLen: 1.0,
+    id: 'v69', kv: 69, label: '69 kV', color: '#00FFFF', textColor: '#071018', vSpacing: 2.4, armLen: 2.3, insLen: 1.0,
     bundle: 1, baseHeight: 15, baseWidth: 4.2, maxSpan: 350, minSpan: 40, catenaryC: 1200,
     conductor: '1 × 336.4 MCM ACSR', groundWires: 1, rowHalfWidthM: 15, centerlineColor: '#00FFFF',
   },
   v115: {
-    id: 'v115', kv: 115, label: '115 kV', color: '#39c98a', vSpacing: 3.2, armLen: 3.0, insLen: 1.4,
+    id: 'v115', kv: 115, label: '115 kV', color: '#FFBF00', textColor: '#071018', vSpacing: 3.2, armLen: 3.0, insLen: 1.4,
     bundle: 1, baseHeight: 18, baseWidth: 5.2, maxSpan: 400, minSpan: 50, catenaryC: 1400,
     conductor: '1 × 795 MCM ACSR', groundWires: 1, rowHalfWidthM: 30, centerlineColor: '#FFBF00',
   },
   v138: {
-    id: 'v138', kv: 138, label: '138 kV', color: '#ffa63d', vSpacing: 3.8, armLen: 3.5, insLen: 1.7,
+    id: 'v138', kv: 138, label: '138 kV', color: '#FF7F50', textColor: '#071018', vSpacing: 3.8, armLen: 3.5, insLen: 1.7,
     bundle: 1, baseHeight: 20, baseWidth: 5.8, maxSpan: 450, minSpan: 50, catenaryC: 1500,
     conductor: '1 × 795 MCM ACSR', groundWires: 1, rowHalfWidthM: 30, centerlineColor: '#FF7F50',
   },
   v230: {
-    id: 'v230', kv: 230, label: '230 kV', color: '#ff5a5f', vSpacing: 5.5, armLen: 5.0, insLen: 2.6,
+    id: 'v230', kv: 230, label: '230 kV', color: '#FF0000', textColor: '#ffffff', vSpacing: 5.5, armLen: 5.0, insLen: 2.6,
     bundle: 2, baseHeight: 24, baseWidth: 7.6, maxSpan: 550, minSpan: 60, catenaryC: 1700,
     conductor: '2 × 795 MCM ACSR', groundWires: 2, rowHalfWidthM: 40, centerlineColor: '#FF0000',
   },
+  v350: {
+    id: 'v350', kv: 350, label: '350 kV DC', color: '#4C0000', textColor: '#ffffff', vSpacing: 7.5, armLen: 7.2, insLen: 3.7,
+    bundle: 2, baseHeight: 28, baseWidth: 9.8, maxSpan: 620, minSpan: 70, catenaryC: 1850,
+    conductor: '2 × 795 MCM ACSR (HVDC)', groundWires: 2, rowHalfWidthM: 50, centerlineColor: '#4C0000',
+  },
   v500: {
-    id: 'v500', kv: 500, label: '500 kV', color: '#3da5ff', vSpacing: 10, armLen: 9.5, insLen: 4.8,
+    id: 'v500', kv: 500, label: '500 kV', color: '#0000FF', textColor: '#ffffff', vSpacing: 10, armLen: 9.5, insLen: 4.8,
     bundle: 4, baseHeight: 32, baseWidth: 12, maxSpan: 700, minSpan: 80, catenaryC: 2000,
     conductor: '4 × 795 MCM ACSR', groundWires: 2, rowHalfWidthM: 60, centerlineColor: '#0000FF',
   },
 };
 
-export const TRANSMISSION_VOLTAGES: VoltageId[] = ['v69', 'v115', 'v138', 'v230', 'v500'];
+export const TRANSMISSION_VOLTAGES: VoltageId[] = ['v69', 'v115', 'v138', 'v230', 'v350', 'v500'];

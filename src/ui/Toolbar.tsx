@@ -17,11 +17,11 @@ const CONDUCTOR_TOOLS = [
   { id: 'connect', tool: 'connect' as const, defId: null, name: 'String Conductors', icon: 'connect', desc: 'Click structures one after another to string phase conductors and ground wires between them.' },
   { id: 'route-dc', tool: 'route' as const, defId: 'dc-suspension', name: 'Auto Route · DC Lattice', icon: 'route', desc: 'Click start and end: suspension towers are placed at the ruling span along the terrain, with dead-ends at the ends.' },
   { id: 'route-sc', tool: 'route' as const, defId: 'sc-suspension', name: 'Auto Route · SC Lattice', icon: 'route', desc: 'Single-circuit lattice route between two points.' },
-  { id: 'route-pole', tool: 'route' as const, defId: 'pole-dc', name: 'Auto Route · Steel Poles', icon: 'route', desc: 'Double-circuit steel pole line (69–138 kV).' },
-  { id: 'route-dist', tool: 'route' as const, defId: 'pole-dist', name: 'Auto Route · Distribution', icon: 'route', desc: '13.8 kV distribution feeder on concrete poles.' },
+  { id: 'route-pole', tool: 'route' as const, defId: 'pole-dc', name: 'Auto Route · Steel Poles', icon: 'route', desc: 'Double-circuit steel pole line (34.5–138 kV).' },
+  { id: 'route-dist', tool: 'route' as const, defId: 'pole-dist', name: 'Auto Route · Distribution', icon: 'route', desc: '13.8–34.5 kV distribution feeder on concrete poles.' },
 ];
 
-const VOLT_ORDER: VoltageId[] = ['v13', 'v69', 'v115', 'v138', 'v230', 'v500'];
+const VOLT_ORDER: VoltageId[] = ['v13', 'v34', 'v69', 'v115', 'v138', 'v230', 'v350', 'v500'];
 
 export function Toolbar() {
   const [tab, setTab] = useState<Tab | null>('tower');
@@ -59,7 +59,7 @@ export function Toolbar() {
             <button
               key={v}
               className={`volt ${voltage === v ? 'on' : ''}`}
-              style={{ ['--vc' as string]: VOLTAGES[v].color }}
+              style={{ ['--vc' as string]: VOLTAGES[v].color, ['--vt' as string]: VOLTAGES[v].textColor }}
               disabled={!allowed(v)}
               onClick={() => setVoltage(v)}
             >
@@ -79,9 +79,9 @@ export function Toolbar() {
                     className={`card ${on ? 'on' : ''}`}
                     onClick={() => {
                       setTool(c.tool, c.defId);
-                      if (c.id === 'route-dist') setVoltage('v13');
-                      if (c.id === 'route-pole' && !['v69', 'v115', 'v138'].includes(voltage)) setVoltage('v69');
-                      if ((c.id === 'route-dc' || c.id === 'route-sc') && ['v13'].includes(voltage)) setVoltage('v230');
+                      if (c.id === 'route-dist' && !['v13', 'v34'].includes(voltage)) setVoltage('v13');
+                      if (c.id === 'route-pole' && !['v34', 'v69', 'v115', 'v138'].includes(voltage)) setVoltage('v69');
+                      if ((c.id === 'route-dc' || c.id === 'route-sc') && ['v13', 'v34'].includes(voltage)) setVoltage('v230');
                     }}
                     onMouseEnter={() => setHover({ name: c.name, desc: c.desc })}
                     onMouseLeave={() => setHover(null)}

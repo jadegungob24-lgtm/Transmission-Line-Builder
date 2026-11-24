@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import writeXlsxFile from 'write-excel-file/browser';
 import { DEF_BY_ID, insulatorRange, modelOf } from '../catalog/structures';
 import { VOLTAGES } from '../catalog/voltages';
-import { bearingDeg, distanceM } from '../core/geo';
+import { distanceM } from '../core/geo';
+import { buildNgcpWorkbookSheets } from '../core/excel';
 import { buildKmz } from '../core/kmz';
 import { toPrs92 } from '../core/prs92';
 import { autoTag, MAX_NAME, nameProblem, structureTag, useStore } from '../core/store';
@@ -64,54 +65,17 @@ export function scheduleRows(structures: Record<string, Structure>, spans: Recor
     });
 }
 
-function spanRows(structures: Record<string, Structure>, spans: Record<string, Span>) {
-  return Object.values(spans)
-    .map((sp) => ({ sp, A: structures[sp.a], B: structures[sp.b] }))
-    .filter((r) => r.A && r.B)
-    .sort((x, y) => Math.min(x.A.no ?? 0, x.B.no ?? 0) - Math.min(y.A.no ?? 0, y.B.no ?? 0) || Math.max(x.A.no ?? 0, x.B.no ?? 0) - Math.max(y.A.no ?? 0, y.B.no ?? 0))
-    .map(({ sp, A, B }) => {
-      const [P, Q] = (A.no ?? 0) <= (B.no ?? 0) ? [A, B] : [B, A];
-      return { from: structureTag(P), to: structureTag(Q), voltage: VOLTAGES[sp.voltage].label, length: distanceM(P, Q), bearing: bearingDeg(P, Q) };
-    });
-}
-
 const safeName = (s: string) => s.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Project';
 
-/** Download the current project's tower schedule (and spans) as an .xlsx workbook. */
+/** Download the current project's tower schedule in NGCP format with live Excel formulas (.xlsx). */
 export async function exportScheduleXlsx() {
   const s = useStore.getState();
   const project = s.projects.find((p) => p.id === s.projectId)?.name ?? 'Project';
-  const rows = scheduleRows(s.structures, s.spans, s.env.exaggeration);
-  const head = (v: string) => ({ value: v, fontWeight: 'bold' as const, backgroundColor: '#DCE6F1', wrap: true });
-  const num = (v: number, format: string) => ({ value: v, type: Number, format });
-
-  const towers = [
-    ['No.', 'Structure type', 'Voltage', 'PRS92 zone', 'Northing (m)', 'Easting (m)', 'Latitude (°)', 'Longitude (°)', 'Ground elev. (m)', 'Height (m)', 'Insulator (m)', 'Heading (°)', 'Line angle (°)', 'Connected to'].map(head),
-    ...rows.map((r) => [
-      r.tag, r.type, r.voltage, r.zone,
-      num(r.northing, '#,##0.000'), num(r.easting, '#,##0.000'),
-      num(r.lat, '0.000000'), num(r.lng, '0.000000'),
-      num(r.elev, '0.0'), num(r.height, '0.0'),
-      r.insulator == null ? null : num(r.insulator, '0.00'),
-      num(r.heading, '0.0'),
-      r.angle == null ? null : num(r.angle, '0.0'),
-      r.links,
-    ]),
-  ];
-  const spans = [
-    ['From', 'To', 'Voltage', 'Span length (m)', 'Bearing (°)'].map(head),
-    ...spanRows(s.structures, s.spans).map((r) => [r.from, r.to, r.voltage, num(r.length, '#,##0.0'), num(r.bearing, '0.0')]),
-  ];
-
-  await writeXlsxFile(
-    [
-      {
-        data: towers, sheet: 'Tower Schedule', stickyRowsCount: 1,
-        columns: [{ width: 9 }, { width: 38 }, { width: 9 }, { width: 13 }, { width: 15 }, { width: 13 }, { width: 12 }, { width: 13 }, { width: 10 }, { width: 9 }, { width: 10 }, { width: 9 }, { width: 10 }, { width: 40 }],
-      },
-      { data: spans, sheet: 'Spans', stickyRowsCount: 1, columns: [{ width: 9 }, { width: 9 }, { width: 9 }, { width: 14 }, { width: 11 }] },
-    ],
-  ).toFile(`${safeName(project)} - Tower Schedule.xlsx`);
+  const sheets = buildNgcpWorkbookSheets(project, s.structures, s.spans, s.env.exaggeration);
+  await writeXlsxFile(sheets as Parameters<typeof writeXlsxFile>[0], {
+    fontFamily: 'Calibri',
+    fontSize: 10,
+  }).toFile(`${safeName(project)} - Tower Schedule.xlsx`);
 }
 
 /** Download the current project's structures as Google Earth pins (.kmz). */

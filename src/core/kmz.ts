@@ -1,6 +1,6 @@
 import { DEF_BY_ID, insulatorRange, modelOf } from '../catalog/structures';
 import { VOLTAGES } from '../catalog/voltages';
-import { distanceM } from './geo';
+import { distanceM, offsetLL } from './geo';
 import { toPrs92 } from './prs92';
 import { buildRowCorridorsGeo } from './row';
 import { structureTag } from './store';
@@ -38,6 +38,7 @@ export function buildKml(project: string, structures: Record<string, Structure>,
   styles.push(
     `<Style id="ss"><IconStyle><color>ffffffff</color><scale>0.6</scale><Icon><href>${STATION_ICON}</href></Icon></IconStyle><LabelStyle><scale>0.6</scale></LabelStyle></Style>`,
     `<Style id="pp"><IconStyle><color>ff3dd2ff</color><scale>0.6</scale><Icon><href>${STATION_ICON}</href></Icon></IconStyle><LabelStyle><scale>0.6</scale></LabelStyle></Style>`,
+    `<Style id="ss-area"><LineStyle><color>ffffffff</color><width>1.2</width></LineStyle><PolyStyle><color>33ffffff</color><outline>1</outline></PolyStyle></Style>`,
   );
 
   const pins = list.map((st) => {
@@ -47,6 +48,7 @@ export function buildKml(project: string, structures: Record<string, Structure>,
     const rows: [string, string][] = [
       ['Structure', def.name],
       ...(def.voltages === 'any' ? [] : [['Voltage', VOLTAGES[st.voltage].label] as [string, string]]),
+      ...(def.areaHa != null && def.footprint ? [['Land area', `${def.areaHa.toFixed(1)} ha (${def.footprint[0]} × ${def.footprint[1]} m)`] as [string, string]] : []),
       ['PRS92 zone', `PTM Zone ${c.zone.roman}`],
       ['Northing', `${c.northing.toFixed(3)} m`],
       ['Easting', `${c.easting.toFixed(3)} m`],
@@ -112,12 +114,36 @@ export function buildKml(project: string, structures: Record<string, Structure>,
     );
   });
 
+  const stationAreas = list
+    .filter((st) => DEF_BY_ID[st.defId]?.footprint)
+    .map((st) => {
+      const def = DEF_BY_ID[st.defId];
+      const [fw, fd] = def.footprint!;
+      const hx = fw / 2;
+      const hy = fd / 2;
+      const rad = (st.rotation * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const corners = [[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy], [-hx, -hy]].map(([lx, ly]) => {
+        const p = offsetLL(st, lx * cos + ly * sin, -lx * sin + ly * cos);
+        return `${p.lng.toFixed(8)},${p.lat.toFixed(8)},0`;
+      }).join(' ');
+      return (
+        `<Placemark><name>${esc(`${structureTag(st)} · ${def.name} (${def.areaHa?.toFixed(1)} ha)`)}</name>` +
+        `<styleUrl>#ss-area</styleUrl>` +
+        `<description>${esc(`${def.name} · ${def.areaHa?.toFixed(1)} ha (${fw} × ${fd} m)`)}</description>` +
+        `<Polygon><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>` +
+        `<outerBoundaryIs><LinearRing><coordinates>${corners}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>`
+      );
+    });
+
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${esc(project)}</name>` +
     `<description>${esc(`Exported from PH Grid Builder · ${list.length} structures · PRS92 / PTM coordinates, centerlines & NGCP ROW corridors`)}</description>` +
     styles.join('') +
     `<Folder><name>Structures</name><open>1</open>${pins.join('')}</Folder>` +
+    (stationAreas.length ? `<Folder><name>Substation Areas</name><open>1</open>${stationAreas.join('')}</Folder>` : '') +
     (centerlines.length ? `<Folder><name>Centerline</name><open>1</open>${centerlines.join('')}</Folder>` : '') +
     (lines.length ? `<Folder><name>Lines</name>${lines.join('')}</Folder>` : '') +
     (corridors.length ? `<Folder><name>ROW Corridor</name><open>1</open>${corridors.join('')}</Folder>` : '') +

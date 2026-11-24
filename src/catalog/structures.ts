@@ -44,6 +44,14 @@ export interface StructureDef {
   maxAngle?: number;
   capacityMW?: number;
   loadMW?: number;
+  /** Required land area in hectares (for substations). */
+  areaHa?: number;
+  /** Yard footprint [widthM, depthM] in local metres (for substations). */
+  footprint?: [number, number];
+  /** Primary voltage class badge for substations (still accepts any interconnecting line voltage). */
+  nominalVoltage?: VoltageId;
+  /** Keep legacy definition loadable for saved projects without listing in toolbar. */
+  hidden?: boolean;
   /** Standard insulator length when it differs from the voltage class's (m). */
   insDefault?: (v: VoltageSpec) => number;
   /** `ins`: insulator string length (m); omitted = the standard for this class. */
@@ -229,12 +237,14 @@ function fence(B: Builder, hx: number, hy: number) {
   for (let i = 0; i < 4; i++) {
     const a = corners[i];
     const b = corners[(i + 1) % 4];
-    B.beam(a.clone().setZ(2.2), b.clone().setZ(2.2), 0.08, COL.fence);
-    B.beam(a.clone().setZ(1.1), b.clone().setZ(1.1), 0.06, COL.fence);
-    const n = Math.round(a.distanceTo(b) / 8);
+    const len = a.distanceTo(b);
+    B.beam(a.clone().setZ(2.2), b.clone().setZ(2.2), 0.1, COL.fence);
+    B.beam(a.clone().setZ(1.1), b.clone().setZ(1.1), 0.08, COL.fence);
+    const step = Math.max(8, len / 28);
+    const n = Math.max(4, Math.round(len / step));
     for (let k = 0; k < n; k++) {
       const p = a.clone().lerp(b, k / n);
-      B.beam(p.clone().setZ(-0.5), p.clone().setZ(2.4), 0.12, COL.fence);
+      B.beam(p.clone().setZ(-0.5), p.clone().setZ(2.4), 0.14, COL.fence);
     }
   }
 }
@@ -262,23 +272,66 @@ function busbars(B: Builder, G: Builder, x0: number, x1: number, y: number) {
   }
 }
 
-function substation(): BuiltModel {
+interface SubstationOpts {
+  width: number;
+  depth: number;
+  baysPerSide: number;
+  bayW: number;
+  gantryH: number;
+  transformers: number;
+}
+
+function substation(o: SubstationOpts = { width: 96, depth: 70, baysPerSide: 3, bayW: 12, gantryH: 14, transformers: 2 }): BuiltModel {
   const B = new Builder();
   const G = new Builder();
-  B.box(0, 0, -3.85, 96, 70, 8.2, COL.gravel);
-  fence(B, 47, 34);
-  const g1 = gantry(B, -6, 27, 1, 3);
-  const g2 = gantry(B, -6, -27, -1, 3);
-  busbars(B, G, -26, 14, 15);
-  busbars(B, G, -26, 14, -15);
-  transformer(B, G, -16, 0, 13.4);
-  transformer(B, G, 4, 0, 13.4);
-  // tie between the two buses
-  for (const dx of [-1.6, 0, 1.6]) G.beam(v3(-27 + dx, -15, 7), v3(-27 + dx, 15, 7), 0.1, COL.alu);
-  // control building
-  B.box(34, 0, 2.3, 12, 20, 4.2, COL.wall);
-  B.box(34, 0, 4.7, 13.4, 21.4, 0.6, COL.roof);
-  B.box(27.9, -4, 1.3, 0.2, 1.6, 2.2, COL.roof);
+  const { width: w, depth: d, baysPerSide, bayW, gantryH, transformers } = o;
+  const hx = w / 2;
+  const hy = d / 2;
+
+  // Gravel pad & perimeter security fence matching required land area (w × d)
+  B.box(0, 0, -3.85, w, d, 8.2, COL.gravel);
+  fence(B, hx - 1, hy - 1);
+
+  // North & south switchyard gantries
+  const gantryX = -w * 0.08;
+  const gantryY = hy * 0.72;
+  const g1 = gantry(B, gantryX, gantryY, 1, baysPerSide, bayW, gantryH);
+  const g2 = gantry(B, gantryX, -gantryY, -1, baysPerSide, bayW, gantryH);
+
+  // Main double busbars
+  const busHalfSpan = Math.max(20, (baysPerSide * bayW) / 2 + 4);
+  const busX0 = gantryX - busHalfSpan;
+  const busX1 = gantryX + busHalfSpan;
+  const busY = hy * 0.36;
+  busbars(B, G, busX0, busX1, busY);
+  busbars(B, G, busX0, busX1, -busY);
+
+  // Power transformers evenly spaced along yard centerline
+  const txSpread = Math.max(20, (busX1 - busX0) * 0.72);
+  for (let i = 0; i < transformers; i++) {
+    const t = transformers === 1 ? 0.5 : i / (transformers - 1);
+    const txX = gantryX - txSpread / 2 + t * txSpread;
+    transformer(B, G, txX, 0, busY - 1.6);
+  }
+
+  // Bus tie connecting north & south buses
+  for (const dx of [-1.6, 0, 1.6]) G.beam(v3(busX0 - 1 + dx, -busY, 7), v3(busX0 - 1 + dx, busY, 7), 0.12, COL.alu);
+
+  // Control building (scaled appropriately for larger 230/500 kV yards)
+  const bldgW = Math.min(28, Math.max(12, w * 0.07));
+  const bldgD = Math.min(48, Math.max(20, d * 0.18));
+  const bldgH = w >= 400 ? 6.5 : 4.2;
+  const bldgX = hx - bldgW / 2 - Math.max(8, w * 0.05);
+  B.box(bldgX, 0, bldgH / 2 + 0.2, bldgW, bldgD, bldgH, COL.wall);
+  B.box(bldgX, 0, bldgH + 0.5, bldgW + 1.6, bldgD + 1.6, 0.6, COL.roof);
+  B.box(bldgX - bldgW / 2 - 0.1, -bldgD * 0.2, 1.3, 0.2, 1.8, 2.2, COL.roof);
+
+  // Auxiliary GIS / relay hall on 500 kV (20 ha) substations
+  if (w >= 400) {
+    B.box(bldgX, -bldgD - 20, bldgH / 2 + 0.2, bldgW * 1.1, bldgD * 0.75, bldgH * 1.15, COL.wall);
+    B.box(bldgX, -bldgD - 20, bldgH * 1.15 + 0.5, bldgW * 1.1 + 1.6, bldgD * 0.75 + 1.6, 0.6, COL.roof);
+  }
+
   return {
     geometry: B.build(),
     glow: G.build(),
@@ -286,8 +339,8 @@ function substation(): BuiltModel {
     groundWires: [...g1.gws, ...g2.gws],
     strain: false,
     exclusive: true,
-    height: 17.5,
-    radius: 60,
+    height: gantryH + 3.5,
+    radius: Math.round(Math.min(w, d) * 0.52),
   };
 }
 
@@ -404,9 +457,37 @@ export const STRUCTURE_DEFS: StructureDef[] = [
     build: (_v, ins) => distributionPole(ins),
   },
   {
+    id: 'substation-69', name: '69 kV Substation', short: '69 kV S/S', category: 'substation', icon: 'substation',
+    description: '69 kV transmission substation (2.0 ha required land area, 160 × 125 m). Interconnects lines of any voltage and serves local load.',
+    voltages: 'any', nominalVoltage: 'v69', role: 'substation', circuits: 4, spanFactor: 1.25, loadMW: 50,
+    areaHa: 2.0, footprint: [160, 125],
+    build: () => substation({ width: 160, depth: 125, baysPerSide: 2, bayW: 14, gantryH: 12, transformers: 2 }),
+  },
+  {
+    id: 'substation-138', name: '138/115 kV Substation', short: '138/115 kV S/S', category: 'substation', icon: 'substation',
+    description: '138/115 kV transmission substation (5.0 ha required land area, 250 × 200 m). Interconnects lines of any voltage and serves regional load.',
+    voltages: 'any', nominalVoltage: 'v138', role: 'substation', circuits: 6, spanFactor: 1.25, loadMW: 100,
+    areaHa: 5.0, footprint: [250, 200],
+    build: () => substation({ width: 250, depth: 200, baysPerSide: 3, bayW: 18, gantryH: 15, transformers: 2 }),
+  },
+  {
+    id: 'substation-230', name: '230 kV Substation', short: '230 kV S/S', category: 'substation', icon: 'substation',
+    description: '230 kV backbone transmission substation (6.0 ha required land area, 300 × 200 m). Interconnects lines of any voltage and serves bulk load.',
+    voltages: 'any', nominalVoltage: 'v230', role: 'substation', circuits: 8, spanFactor: 1.25, loadMW: 200,
+    areaHa: 6.0, footprint: [300, 200],
+    build: () => substation({ width: 300, depth: 200, baysPerSide: 4, bayW: 20, gantryH: 18, transformers: 3 }),
+  },
+  {
+    id: 'substation-500', name: '500 kV Substation', short: '500 kV S/S', category: 'substation', icon: 'substation',
+    description: '500 kV extra-high-voltage substation (20.0 ha required land area, 500 × 400 m). Major grid hub interconnecting 500 kV and lower-voltage lines.',
+    voltages: 'any', nominalVoltage: 'v500', role: 'substation', circuits: 12, spanFactor: 1.25, loadMW: 500,
+    areaHa: 20.0, footprint: [500, 400],
+    build: () => substation({ width: 500, depth: 400, baysPerSide: 6, bayW: 28, gantryH: 24, transformers: 4 }),
+  },
+  {
     id: 'substation', name: 'Transmission Substation', short: 'Substation', category: 'substation', icon: 'substation',
     description: 'Switchyard with six line bays, busbars, two power transformers and a control building. Terminates and interconnects lines of any voltage, and draws load.',
-    voltages: 'any', role: 'substation', circuits: 6, spanFactor: 1.25, loadMW: 120,
+    voltages: 'any', role: 'substation', circuits: 6, spanFactor: 1.25, loadMW: 120, hidden: true,
     build: () => substation(),
   },
   {

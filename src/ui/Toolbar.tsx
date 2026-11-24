@@ -32,7 +32,7 @@ export function Toolbar() {
   const setVoltage = useStore((s) => s.setVoltage);
   const [hover, setHover] = useState<{ name: string; desc: string; extra?: string } | null>(null);
 
-  const defs = STRUCTURE_DEFS.filter((d) => d.category === (tab as Category));
+  const defs = STRUCTURE_DEFS.filter((d) => d.category === (tab as Category) && !d.hidden);
   const activeDef = buildDefId ? STRUCTURE_DEFS.find((d) => d.id === buildDefId) : null;
   const allowed = (v: VoltageId) => !activeDef || defSupports(activeDef, v);
 
@@ -94,19 +94,25 @@ export function Toolbar() {
             : defs.map((d) => {
                 const on = tool === 'build' && buildDefId === d.id;
                 const vs = d.voltages === 'any' ? 'All voltages' : d.voltages.map((v) => VOLTAGES[v].label).join(' · ');
+                const accent = d.nominalVoltage ? VOLTAGES[d.nominalVoltage].color : undefined;
                 return (
                   <button
                     key={d.id}
                     className={`card ${on ? 'on' : ''}`}
-                    onClick={() => setTool(on ? 'select' : 'build', on ? null : d.id)}
+                    style={accent ? { borderTop: `3px solid ${accent}` } : undefined}
+                    onClick={() => {
+                      setTool(on ? 'select' : 'build', on ? null : d.id);
+                      if (!on && d.nominalVoltage) setVoltage(d.nominalVoltage);
+                    }}
                     onMouseEnter={() => setHover({
                       name: d.name, desc: d.description,
-                      extra: `${vs}${d.capacityMW ? ` · ${d.capacityMW} MW` : ''}${d.loadMW ? ` · ${d.loadMW} MW load` : ''}${d.maxAngle != null ? ` · max angle ${d.maxAngle}°` : ''}`,
+                      extra: `${vs}${d.areaHa != null && d.footprint ? ` · ${d.areaHa.toFixed(1)} ha (${d.footprint[0]}×${d.footprint[1]} m)` : ''}${d.capacityMW ? ` · ${d.capacityMW} MW` : ''}${d.loadMW ? ` · ${d.loadMW} MW load` : ''}${d.maxAngle != null ? ` · max angle ${d.maxAngle}°` : ''}`,
                     })}
                     onMouseLeave={() => setHover(null)}
                   >
                     <div className="card-icon"><StructureIcon icon={d.icon} /></div>
                     <div className="card-name">{d.short}</div>
+                    {d.areaHa != null && <div className="card-sub">{d.areaHa.toFixed(1)} ha</div>}
                   </button>
                 );
               })}

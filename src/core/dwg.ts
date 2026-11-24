@@ -143,8 +143,31 @@ export function buildDwgBytes(
     pt.layer = ptsLayer;
     ms.entities.add(pt);
 
-    // Plan symbol: square for substations / power plants, circle for towers / poles
-    if (def.role === 'substation' || def.role === 'source') {
+    // Plan symbol: exact rotated lot boundary for sized substations, square for other stations, circle for towers / poles
+    if (def.footprint) {
+      const [fw, fd] = def.footprint;
+      const hx = fw / 2;
+      const hy = fd / 2;
+      const rad = (st.rotation * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const localCorners: [number, number][] = [
+        [-hx, -hy],
+        [hx, -hy],
+        [hx, hy],
+        [-hx, hy],
+      ];
+      const verts = localCorners.map(([lx, ly]) => {
+        const rx = x + lx * cos + ly * sin;
+        const ry = y - lx * sin + ly * cos;
+        track(rx, ry, z);
+        return new LwPolylineVertex(new XY(rx, ry));
+      });
+      const lot = new LwPolyline(verts);
+      lot.isClosed = true;
+      lot.layer = symLayer;
+      ms.entities.add(lot);
+    } else if (def.role === 'substation' || def.role === 'source') {
       const r = symRadius * 1.5;
       const corners = [
         new XYZ(x - r, y - r, z),
@@ -164,7 +187,7 @@ export function buildDwgBytes(
     }
 
     // Structure tag & type label
-    const voltageStr = def.voltages === 'any' ? '' : `, ${VOLTAGES[st.voltage].label}`;
+    const voltageStr = def.voltages === 'any' ? (def.areaHa != null ? `, ${def.areaHa.toFixed(1)} ha` : '') : `, ${VOLTAGES[st.voltage].label}`;
     const label1 = new TextEntity(`${tag} (${def.short}${voltageStr})`);
     label1.insertPoint = new XYZ(x + symRadius + 4, y + 2, z);
     label1.height = tagTextH;

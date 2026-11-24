@@ -162,6 +162,9 @@ export function InfoPanel() {
         {remark && <Row k="Remarks" v={<span className="bad">⚠ {remark}</span>} />}
         {def.capacityMW && <Row k="Capacity" v={`${def.capacityMW} MW`} />}
         {def.loadMW && <Row k="Load" v={`${def.loadMW} MW`} />}
+        {def.areaHa != null && def.footprint && (
+          <Row k="Land area" v={`${def.areaHa.toFixed(1)} ha (${def.footprint[0]} × ${def.footprint[1]} m)`} />
+        )}
         <Coordinates key={st.id} id={st.id} lng={st.lng} lat={st.lat} editable={!moving} />
         <div className="info-actions">
           <button onClick={() => runtime.ctrl?.rotate(-15)}>⟲ 15°</button>

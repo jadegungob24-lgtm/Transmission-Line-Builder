@@ -27,8 +27,8 @@ export function buildKml(project: string, structures: Record<string, Structure>,
   const styles: string[] = [];
   for (const v of Object.values(VOLTAGES)) {
     styles.push(
-      `<Style id="t-${v.id}"><IconStyle><color>${kmlColor(TOWER_PIN_COLOR)}</color><scale>0.9</scale><Icon><href>${ICON}</href></Icon></IconStyle>` +
-        `<LabelStyle><scale>0.8</scale></LabelStyle></Style>`,
+      `<Style id="t-${v.id}"><IconStyle><color>${kmlColor(TOWER_PIN_COLOR)}</color><scale>0.6</scale><Icon><href>${ICON}</href></Icon></IconStyle>` +
+        `<LabelStyle><scale>0.6</scale></LabelStyle></Style>`,
       `<Style id="l-${v.id}"><LineStyle><color>${kmlColor(v.centerlineColor)}</color><width>0.8</width></LineStyle></Style>`,
       `<Style id="cl-${v.id}"><LineStyle><color>${kmlColor(v.centerlineColor)}</color><width>0.8</width></LineStyle></Style>`,
       `<Style id="row-${v.id}"><LineStyle><color>${kmlColor(ROW_COLOR, 'ff')}</color><width>0.8</width></LineStyle>` +
@@ -36,8 +36,8 @@ export function buildKml(project: string, structures: Record<string, Structure>,
     );
   }
   styles.push(
-    `<Style id="ss"><IconStyle><color>ffffffff</color><scale>1.3</scale><Icon><href>${STATION_ICON}</href></Icon></IconStyle><LabelStyle><scale>0.9</scale></LabelStyle></Style>`,
-    `<Style id="pp"><IconStyle><color>ff3dd2ff</color><scale>1.3</scale><Icon><href>${STATION_ICON}</href></Icon></IconStyle><LabelStyle><scale>0.9</scale></LabelStyle></Style>`,
+    `<Style id="ss"><IconStyle><color>ffffffff</color><scale>0.6</scale><Icon><href>${STATION_ICON}</href></Icon></IconStyle><LabelStyle><scale>0.6</scale></LabelStyle></Style>`,
+    `<Style id="pp"><IconStyle><color>ff3dd2ff</color><scale>0.6</scale><Icon><href>${STATION_ICON}</href></Icon></IconStyle><LabelStyle><scale>0.6</scale></LabelStyle></Style>`,
   );
 
   const pins = list.map((st) => {

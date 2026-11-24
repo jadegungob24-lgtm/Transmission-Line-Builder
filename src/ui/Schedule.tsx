@@ -8,7 +8,7 @@ import { buildKmz } from '../core/kmz';
 import { toPrs92 } from '../core/prs92';
 import { autoTag, MAX_NAME, nameProblem, structureTag, useStore } from '../core/store';
 import type { Span, Structure } from '../core/types';
-import { lineAngle, neighbours } from '../network/connectivity';
+import { angleRemark, lineAngle, neighbours } from '../network/connectivity';
 import { runtime } from '../map/runtime';
 
 // Tower schedule: every structure in the current project, numbered in the order it
@@ -31,6 +31,7 @@ export interface ScheduleRow {
   heading: number;
   angle: number | null;
   links: string;
+  remark: string | null;
 }
 
 export function scheduleRows(structures: Record<string, Structure>, spans: Record<string, Span>, exaggeration: number): ScheduleRow[] {
@@ -45,6 +46,7 @@ export function scheduleRows(structures: Record<string, Structure>, spans: Recor
         .sort((a, b) => (a.no ?? 0) - (b.no ?? 0))
         .map((o) => `${structureTag(o)} (${distanceM(st, o).toFixed(0)} m)`)
         .join(', ');
+      const angle = lineAngle(st, structures, spans);
       return {
         id: st.id,
         tag: structureTag(st),
@@ -59,8 +61,9 @@ export function scheduleRows(structures: Record<string, Structure>, spans: Recor
         height: modelOf(st).height,
         insulator: insulatorRange(st.defId, st.voltage) ? st.insLen ?? insulatorRange(st.defId, st.voltage)!.std : null,
         heading: st.rotation,
-        angle: lineAngle(st, structures, spans),
+        angle,
         links,
+        remark: angleRemark(st, angle),
       };
     });
 }
@@ -162,6 +165,7 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
     setDwgBusy(false);
   };
   const activeId = movingId ?? (selected?.kind === 'structure' ? selected.id : null);
+  const warnCount = useMemo(() => rows.filter((r) => r.remark != null).length, [rows]);
 
   return (
     <div className="schedule panel">
@@ -190,7 +194,7 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
             <thead>
               <tr>
                 <th>No.</th><th>Type</th><th>Voltage</th><th>Zone</th><th className="r">Northing (m)</th><th className="r">Easting (m)</th>
-                <th className="r">Elev. (m)</th><th className="r">Height (m)</th><th className="r">Insulator (m)</th><th className="r">Heading</th><th className="r">Angle</th><th>Connected to</th>
+                <th className="r">Elev. (m)</th><th className="r">Height (m)</th><th className="r">Insulator (m)</th><th className="r">Heading</th><th className="r">Angle</th><th>Connected to</th><th>Remarks</th>
               </tr>
             </thead>
             <tbody>
@@ -225,15 +229,20 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
                   <td className="r">{r.height.toFixed(1)}</td>
                   <td className="r">{r.insulator == null ? '—' : r.insulator.toFixed(2)}</td>
                   <td className="r">{r.heading.toFixed(0)}°</td>
-                  <td className="r">{r.angle == null ? '—' : `${r.angle.toFixed(1)}°`}</td>
+                  <td className={`r${r.remark ? ' bad' : ''}`}>{r.angle == null ? '—' : `${r.angle.toFixed(1)}°`}</td>
                   <td className="links">{r.links}</td>
+                  <td className="remark-cell">{r.remark ? <span className="bad">⚠ {r.remark}</span> : <span className="muted">—</span>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-      <p className="muted small schedule-foot">{rows.length} structures · PRS92 / PTM coordinates · updates as you build</p>
+      <p className="muted small schedule-foot">
+        {rows.length} structures
+        {warnCount > 0 && <> · <span className="bad">{warnCount} {warnCount === 1 ? 'exceeds' : 'exceed'} design angle</span></>}
+        {' · PRS92 / PTM coordinates · updates as you build'}
+      </p>
     </div>
   );
 }

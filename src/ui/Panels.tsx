@@ -7,7 +7,7 @@ import { bearingDeg } from '../core/geo';
 import { formatPrs92, fromPrs92, PTM_ZONES, toPrs92 } from '../core/prs92';
 import { autoTag, editDirty, MAX_NAME, nameProblem, structureTag, useHud, useStore } from '../core/store';
 import type { Structure } from '../core/types';
-import { lineAngle, neighbours } from '../network/connectivity';
+import { angleRemark, lineAngle, neighbours } from '../network/connectivity';
 import { SUN } from '../map/environment';
 import { flyTo, runtime, setView } from '../map/runtime';
 import { ToolIcon } from './Icons';
@@ -121,7 +121,7 @@ export function InfoPanel() {
     const nb = neighbours(st.id, spans);
     const ang = lineAngle(st, structures, spans);
     const ex = useStore.getState().env.exaggeration || 1;
-    const warn = net.angleWarnings[st.id];
+    const remark = angleRemark(st, ang);
     return (
       <div className={`info panel${dirty && !moving ? ' dirty' : ''}`}>
         <div className="info-head">
@@ -148,8 +148,8 @@ export function InfoPanel() {
         <Row k="Ground elevation" v={`${(st.elev / ex).toFixed(0)} m`} />
         <Row k="Heading" v={`${st.rotation.toFixed(0)}°${st.manualRot ? ' (manual)' : ''}`} />
         <Row k="Connections" v={`${nb.length}`} />
-        {ang != null && <Row k="Line angle" v={<span className={warn ? 'bad' : ''}>{ang.toFixed(1)}°</span>} />}
-        {warn != null && <p className="bad small">Deflection exceeds the {def.maxAngle}° limit for this structure. Use an angle or dead-end tower here.</p>}
+        {ang != null && <Row k="Line angle" v={<span className={remark ? 'bad' : ''}>{ang.toFixed(1)}°</span>} />}
+        {remark && <Row k="Remarks" v={<span className="bad">⚠ {remark}</span>} />}
         {def.capacityMW && <Row k="Capacity" v={`${def.capacityMW} MW`} />}
         {def.loadMW && <Row k="Load" v={`${def.loadMW} MW`} />}
         <Coordinates key={st.id} id={st.id} lng={st.lng} lat={st.lat} editable={!moving} />

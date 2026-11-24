@@ -272,7 +272,7 @@ kbd { background: #26364a; border: 1px solid #3b4f66; border-bottom-width: 2px; 
 /* tower schedule */
 .schedule {
   position: absolute; left: 66px; top: 76px; z-index: 4; padding: 12px 14px;
-  width: min(980px, calc(100vw - 390px)); max-height: calc(100vh - 290px); display: flex; flex-direction: column;
+  width: min(1120px, calc(100vw - 390px)); max-height: calc(100vh - 290px); display: flex; flex-direction: column;
 }
 .schedule-actions { display: flex; align-items: center; gap: 8px; }
 .schedule-actions .primary {
@@ -288,6 +288,7 @@ kbd { background: #26364a; border: 1px solid #3b4f66; border-bottom-width: 2px; 
 .schedule td { padding: 5px 8px; white-space: nowrap; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
 .schedule .r { text-align: right; }
 .schedule td.links { color: var(--muted); white-space: normal; min-width: 180px; }
+.schedule td.remark-cell { white-space: normal; min-width: 200px; font-weight: 500; }
 .schedule tbody tr { cursor: pointer; }
 .schedule tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
 .schedule tbody tr.on { background: rgba(61, 165, 255, 0.18); }

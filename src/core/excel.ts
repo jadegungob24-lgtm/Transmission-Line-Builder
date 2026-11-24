@@ -6,7 +6,7 @@ import { toPrs92 } from './prs92';
 import { traceAlignmentChains } from './row';
 import { structureTag } from './store';
 import type { Span, Structure } from './types';
-import { lineAngle, neighbours } from '../network/connectivity';
+import { angleRemark, lineAngle, neighbours } from '../network/connectivity';
 
 // NGCP-format Tower Schedule & Bill of Materials Excel (.xlsx) builder.
 // Mirrors the standard interleaved Structure / Span row layout with live Excel
@@ -309,7 +309,15 @@ function buildNgcpLineSheet(
       typeCell = strCell('DT4', { fontWeight: 'bold' });
     }
 
-    const remarks = `${def.short} · ${vSpec.label} · PTM Zone ${c.zone.roman}`;
+    const baseRemark = `${def.short} · ${vSpec.label} · PTM Zone ${c.zone.roman}`;
+    const remarkCell: Cell =
+      isConnectedLine && isInterior && !isStation && def.maxAngle != null
+        ? fmlCell(
+            `IF(G${r}>90.5,"Exceeds ${def.maxAngle}° limit (above 90° max)",IF(G${r}>${def.maxAngle + 0.5},"Exceeds ${def.maxAngle}° limit — use "&IF(G${r}>30,"Dead-End","Angle or Dead-End")&" tower","${baseRemark}"))`,
+            undefined,
+            { align: 'left' },
+          )
+        : strCell(baseRemark, { align: 'left' });
 
     data.push(
       makeRow(
@@ -340,7 +348,7 @@ function buildNgcpLineSheet(
           24: numCell(2, '#,##0', { align: 'center' }),
           25: numCell(2, '#,##0', { align: 'center' }),
           26: strCell(null),
-          27: strCell(remarks, { align: 'left' }),
+          27: remarkCell,
         },
         { from: 1, to: 27 },
       ),
@@ -539,13 +547,14 @@ function buildReferenceSheet(
     [
       'No.', 'Structure type', 'Voltage', 'ROW (±m)', 'PRS92 zone', 'Northing (m)', 'Easting (m)',
       'Latitude (°)', 'Longitude (°)', 'Ground elev. (m)', 'Height (m)', 'Insulator (m)',
-      'Heading (°)', 'Line angle (°)', 'Connected to',
+      'Heading (°)', 'Line angle (°)', 'Connected to', 'Remarks',
     ].map(head),
     ...list.map((st): Row => {
       const def = DEF_BY_ID[st.defId];
       const c = toPrs92(st.lng, st.lat);
       const ins = insulatorRange(st.defId, st.voltage) ? st.insLen ?? insulatorRange(st.defId, st.voltage)!.std : null;
       const ang = lineAngle(st, structures, spans);
+      const remark = angleRemark(st, ang);
       const links = neighbours(st.id, spans)
         .map((n) => structures[n.other])
         .filter(Boolean)
@@ -567,8 +576,9 @@ function buildReferenceSheet(
         numCell(modelOf(st).height, '0.0'),
         ins == null ? strCell('—') : numCell(ins, '0.00'),
         numCell(st.rotation, '0.0'),
-        ang == null ? strCell('—') : numCell(ang, '0.0'),
+        ang == null ? strCell('—') : numCell(ang, '0.0', remark ? { textColor: '#B91C1C', fontWeight: 'bold' } : {}),
         strCell(links, { align: 'left' }),
+        strCell(remark ?? '', { align: 'left', ...(remark ? { textColor: '#B91C1C', fontWeight: 'bold' } : {}) }),
       ];
     }),
   ];
@@ -606,7 +616,7 @@ function buildReferenceSheet(
     columns: [
       { width: 12 }, { width: 32 }, { width: 10 }, { width: 10 }, { width: 14 },
       { width: 15 }, { width: 14 }, { width: 12 }, { width: 13 }, { width: 12 },
-      { width: 10 }, { width: 11 }, { width: 10 }, { width: 11 }, { width: 36 },
+      { width: 10 }, { width: 11 }, { width: 10 }, { width: 11 }, { width: 36 }, { width: 38 },
     ],
   };
 }

@@ -40,6 +40,16 @@ export function lineAngle(st: Structure, structures: Record<string, Structure>, 
   return 180 - d;
 }
 
+/** Warning remark when a structure's deflection angle exceeds its design limit, else null. */
+export function angleRemark(st: Structure, angle: number | null): string | null {
+  const d = DEF_BY_ID[st.defId];
+  if (!d || d.role !== 'line' || d.maxAngle == null || angle == null) return null;
+  if (angle <= d.maxAngle + 0.5) return null;
+  if (angle > 90) return `Exceeds ${d.maxAngle}° limit (above 90° max)`;
+  if (angle > 30) return `Exceeds ${d.maxAngle}° limit — use Dead-End tower`;
+  return `Exceeds ${d.maxAngle}° limit — use Angle or Dead-End tower`;
+}
+
 export function computeNetwork(structures: Record<string, Structure>, spans: Record<string, Span>): NetworkInfo {
   const adj = new Map<string, { span: Span; other: string }[]>();
   for (const id of Object.keys(structures)) adj.set(id, []);

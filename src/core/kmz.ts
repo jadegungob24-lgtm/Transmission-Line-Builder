@@ -2,6 +2,7 @@ import { DEF_BY_ID, insulatorRange, modelOf } from '../catalog/structures';
 import { VOLTAGES } from '../catalog/voltages';
 import { distanceM } from './geo';
 import { toPrs92 } from './prs92';
+import { buildRowCorridorsGeo } from './row';
 import { structureTag } from './store';
 import type { Span, Structure } from './types';
 
@@ -24,9 +25,12 @@ export function buildKml(project: string, structures: Record<string, Structure>,
   const styles: string[] = [];
   for (const v of Object.values(VOLTAGES)) {
     styles.push(
-      `<Style id="t-${v.id}"><IconStyle><color>${kmlColor(v.color)}</color><scale>1.1</scale><Icon><href>${ICON}</href></Icon></IconStyle>` +
+      `<Style id="t-${v.id}"><IconStyle><color>${kmlColor(v.centerlineColor)}</color><scale>1.1</scale><Icon><href>${ICON}</href></Icon></IconStyle>` +
         `<LabelStyle><scale>0.8</scale></LabelStyle></Style>`,
-      `<Style id="l-${v.id}"><LineStyle><color>${kmlColor(v.color)}</color><width>3</width></LineStyle></Style>`,
+      `<Style id="l-${v.id}"><LineStyle><color>${kmlColor(v.centerlineColor)}</color><width>3</width></LineStyle></Style>`,
+      `<Style id="cl-${v.id}"><LineStyle><color>${kmlColor(v.centerlineColor)}</color><width>3.5</width></LineStyle></Style>`,
+      `<Style id="row-${v.id}"><LineStyle><color>${kmlColor(v.centerlineColor, 'ee')}</color><width>2.2</width></LineStyle>` +
+        `<PolyStyle><color>${kmlColor(v.centerlineColor, '38')}</color><outline>1</outline></PolyStyle></Style>`,
     );
   }
   styles.push(
@@ -74,13 +78,47 @@ export function buildKml(project: string, structures: Record<string, Structure>,
       );
     });
 
+  const rawCorridors = buildRowCorridorsGeo(structures, spans);
+  const centerlines = rawCorridors.map((c) => {
+    const clCoords = c.centerline.map((p) => `${p.lng.toFixed(8)},${p.lat.toFixed(8)},0`).join(' ');
+    return (
+      `<Placemark><name>${esc(`${VOLTAGES[c.voltage].label} Centerline · ${c.label.split(' (')[0]}`)}</name>` +
+      `<styleUrl>#cl-${c.voltage}</styleUrl>` +
+      `<description>${esc(`${VOLTAGES[c.voltage].label} Alignment Centerline · ${(c.lengthM / 1000).toFixed(3)} km · NGCP color ${c.color}`)}</description>` +
+      `<LineString><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>` +
+      `<coordinates>${clCoords}</coordinates></LineString></Placemark>`
+    );
+  });
+
+  const corridors = rawCorridors.map((c) => {
+    const rows: [string, string][] = [
+      ['Voltage', VOLTAGES[c.voltage].label],
+      ['ROW from centerline', `±${c.halfWidthM.toFixed(1)} m`],
+      ['Total ROW width', `${(c.halfWidthM * 2).toFixed(1)} m`],
+      ['Alignment length', `${(c.lengthM / 1000).toFixed(3)} km`],
+      ['Corridor area', `${(c.areaM2 / 10000).toFixed(2)} ha (${Math.round(c.areaM2).toLocaleString('en-US')} m²)`],
+      ['Standard', 'NGCP Circular No. 2010-17'],
+    ];
+    const table = `<table>${rows.map(([k, v]) => `<tr><td><b>${esc(k)}</b></td><td>${esc(v)}</td></tr>`).join('')}</table>`;
+    const ringCoords = c.polygon.map((p) => `${p.lng.toFixed(8)},${p.lat.toFixed(8)},0`).join(' ');
+    return (
+      `<Placemark><name>${esc(c.label)}</name><styleUrl>#row-${c.voltage}</styleUrl>` +
+      `<description><![CDATA[${table}]]></description>` +
+      `<ExtendedData>${rows.map(([k, v]) => `<Data name="${esc(k)}"><value>${esc(v)}</value></Data>`).join('')}</ExtendedData>` +
+      `<Polygon><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>` +
+      `<outerBoundaryIs><LinearRing><coordinates>${ringCoords}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>`
+    );
+  });
+
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${esc(project)}</name>` +
-    `<description>${esc(`Exported from PH Grid Builder · ${list.length} structures · PRS92 / PTM coordinates in each pin`)}</description>` +
+    `<description>${esc(`Exported from PH Grid Builder · ${list.length} structures · PRS92 / PTM coordinates, centerlines & NGCP ROW corridors`)}</description>` +
     styles.join('') +
     `<Folder><name>Structures</name><open>1</open>${pins.join('')}</Folder>` +
+    (centerlines.length ? `<Folder><name>Centerline</name><open>1</open>${centerlines.join('')}</Folder>` : '') +
     (lines.length ? `<Folder><name>Lines</name>${lines.join('')}</Folder>` : '') +
+    (corridors.length ? `<Folder><name>ROW Corridor</name><open>1</open>${corridors.join('')}</Folder>` : '') +
     `</Document></kml>`
   );
 }

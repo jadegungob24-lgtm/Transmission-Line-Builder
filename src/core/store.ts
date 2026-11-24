@@ -24,6 +24,8 @@ export interface Env {
   orbit: boolean;
   basemap: 'satellite' | 'streets' | 'topo';
   labels: boolean;
+  /** Show NGCP Right-of-Way (ROW) corridor along tower alignments. */
+  row: boolean;
   exaggeration: number;
 }
 
@@ -348,7 +350,7 @@ export const useStore = create<State>()((set, get) => ({
   showWelcome: true,
   env: {
     wind: 0.35, rain: false, clouds: true, shadows: true,
-    glow: true, flow: true, orbit: true, basemap: 'satellite', labels: true, exaggeration: 1,
+    glow: true, flow: true, orbit: true, basemap: 'satellite', labels: true, row: true, exaggeration: 1,
   },
   projects: boot.projects,
   projectId: boot.projectId,

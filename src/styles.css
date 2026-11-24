@@ -97,6 +97,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .navw-col button:hover { background: rgba(255, 255, 255, 0.1); }
 .navw-col .sep { height: 1px; background: var(--line); margin: 2px 4px; }
 .chip { background: rgba(0, 0, 0, 0.25); border: 1px solid transparent; border-radius: 6px; padding: 3px 7px; opacity: 0.55; }
+.chip.chip-text { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; color: var(--text); }
 .chip.on { opacity: 1; border-color: var(--accent); }
 .top-actions { display: flex; gap: 6px; }
 
@@ -152,6 +153,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .lg.on { background: linear-gradient(90deg, #ff5a5f, #ffe7a0, #ff5a5f); box-shadow: 0 0 6px #ff5a5f; }
 .lg.off { background: #6f767d; }
 .lg.build { background: repeating-linear-gradient(90deg, #ffa21a 0 5px, #333 5px 10px); }
+.lg.row { height: 7px; background: rgba(255, 0, 0, 0.18); border-top: 1.5px dashed #ff0000; border-bottom: 1.5px dashed #ff0000; border-radius: 1px; }
+.cl-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; font-size: 11px; color: var(--muted); }
+.cl-legend span { display: inline-flex; align-items: center; gap: 3px; }
+.cl-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; border: 1px solid rgba(255, 255, 255, 0.25); }
 
 /* hud */
 .hint {

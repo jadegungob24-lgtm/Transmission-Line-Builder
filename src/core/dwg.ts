@@ -6,16 +6,20 @@ import {
   DwgWriter,
   Layer,
   Line,
+  LwPolyline,
+  LwPolylineVertex,
   MeasurementUnits,
   Point,
   TextEntity,
   UnitsType,
+  XY,
   XYZ,
 } from '@node-projects/acad-ts';
 import { DEF_BY_ID } from '../catalog/structures';
 import { VOLTAGES, type VoltageId } from '../catalog/voltages';
 import { distanceM } from './geo';
 import { toPrs92 } from './prs92';
+import { buildRowCorridorsPlan } from './row';
 import { structureTag } from './store';
 import type { Span, Structure } from './types';
 
@@ -26,10 +30,11 @@ import type { Span, Structure } from './types';
 
 function hexToColor(hex: string): Color {
   const h = hex.replace('#', '');
-  const r = parseInt(h.slice(0, 2), 16) || 255;
-  const g = parseInt(h.slice(2, 4), 16) || 255;
-  const b = parseInt(h.slice(4, 6), 16) || 255;
-  return new Color(r, g, b);
+  const ch = (start: number) => {
+    const n = parseInt(h.slice(start, start + 2), 16);
+    return Number.isNaN(n) ? 255 : n;
+  };
+  return new Color(ch(0), ch(2), ch(4));
 }
 
 function addLayer(doc: CadDocument, name: string, color: Color): Layer {
@@ -65,6 +70,8 @@ export function buildDwgBytes(
   const symLayer = addLayer(doc, 'TL_STRUCTURES_SYM', Color.cyan);
   const lblLayer = addLayer(doc, 'TL_LABELS', new Color(7));
   const spanLblLayer = addLayer(doc, 'TL_SPAN_LABELS', Color.lightGray);
+  const rowLayer = addLayer(doc, 'TL_ROW_CORRIDOR', Color.magenta);
+  const rowLblLayer = addLayer(doc, 'TL_ROW_LABELS', Color.magenta);
   const noteLayer = addLayer(doc, 'TL_NOTES', Color.green);
 
   const lineLayers = new Map<VoltageId, Layer>();
@@ -73,8 +80,20 @@ export function buildDwgBytes(
     if (!layer) {
       const spec = VOLTAGES[vId];
       const safeLabel = spec.label.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
-      layer = addLayer(doc, `TL_LINE_${safeLabel}`, hexToColor(spec.color));
+      layer = addLayer(doc, `TL_LINE_${safeLabel}`, hexToColor(spec.centerlineColor));
       lineLayers.set(vId, layer);
+    }
+    return layer;
+  };
+
+  const clLayers = new Map<VoltageId, Layer>();
+  const getCenterlineLayer = (vId: VoltageId): Layer => {
+    let layer = clLayers.get(vId);
+    if (!layer) {
+      const spec = VOLTAGES[vId];
+      const safeLabel = spec.label.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      layer = addLayer(doc, `TL_CENTERLINE_${safeLabel}`, hexToColor(spec.centerlineColor));
+      clLayers.set(vId, layer);
     }
     return layer;
   };
@@ -193,11 +212,52 @@ export function buildDwgBytes(
     ms.entities.add(spanText);
   }
 
-  // 3. Header note & drawing extents
+  // 3. Alignment centerlines (voltage-colored) & ROW corridors (closed LwPolyline per alignment)
+  const corridors = buildRowCorridorsPlan(structures, spans, coords);
+  let totalRowAreaM2 = 0;
+  for (const c of corridors) {
+    totalRowAreaM2 += c.areaM2;
+
+    // Continuous alignment centerline colored by NGCP voltage code
+    const clPoly = new LwPolyline(c.centerline.map((p) => new LwPolylineVertex(new XY(p.x, p.y))));
+    clPoly.isClosed = false;
+    clPoly.layer = getCenterlineLayer(c.voltage);
+    ms.entities.add(clPoly);
+
+    // Closed ROW corridor boundary polyline
+    const poly = new LwPolyline(c.ring.map((p) => new LwPolylineVertex(new XY(p.x, p.y))));
+    poly.isClosed = true;
+    poly.layer = rowLayer;
+    ms.entities.add(poly);
+
+    for (const p of c.ring) track(p.x, p.y, 0);
+
+    // Label along the middle segment of the left ROW boundary edge
+    const midIdx = Math.floor((c.left.length - 1) / 2);
+    const p1 = c.left[midIdx];
+    const p2 = c.left[midIdx + 1];
+    if (p1 && p2) {
+      let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      if (angle > Math.PI / 2) angle -= Math.PI;
+      if (angle < -Math.PI / 2) angle += Math.PI;
+      const areaHa = c.areaM2 / 10000;
+      const rowText = new TextEntity(
+        `ROW ±${c.halfWidthM.toFixed(1)}m FROM CL (${(c.halfWidthM * 2).toFixed(1)}m TOTAL · ${VOLTAGES[c.voltage].label} · ${areaHa.toFixed(2)} ha)`,
+      );
+      rowText.insertPoint = new XYZ((p1.x + p2.x) / 2, (p1.y + p2.y) / 2 + 6, 0);
+      rowText.height = 5.5;
+      rowText.rotation = angle;
+      rowText.layer = rowLblLayer;
+      ms.entities.add(rowText);
+    }
+  }
+
+  // 4. Header note & drawing extents
   if (rawPts.length > 0) {
     const zoneList = Array.from(zones).sort().join(', ');
+    const rowNote = corridors.length > 0 ? ` | ROW Area: ${(totalRowAreaM2 / 10000).toFixed(2)} ha` : '';
     const note = new TextEntity(
-      `${project} | PRS92 PTM Zone ${zoneList} | Units: Meters | ${rawPts.length} Structures, ${spanList.length} Spans`,
+      `${project} | PRS92 PTM Zone ${zoneList} | Units: Meters | ${rawPts.length} Structures, ${spanList.length} Spans${rowNote}`,
     );
     const pad = Math.max(40, (maxY - minY) * 0.05);
     note.insertPoint = new XYZ(minX, maxY + pad, 0);

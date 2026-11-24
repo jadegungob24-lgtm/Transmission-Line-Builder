@@ -46,6 +46,7 @@ export function TopBar({ onSettings, onHelp, onSchedule, scheduleOpen }: { onSet
       </div>
       <Search />
       <div className="weather">
+        <button className={`chip chip-text ${env.row ? 'on' : ''}`} onClick={() => setEnv({ row: !env.row })} title="Toggle NGCP Right-of-Way (ROW) corridor overlay">ROW</button>
         <button className={`chip ${env.rain ? 'on' : ''}`} onClick={() => setEnv({ rain: !env.rain })} title="Rain and storm wind">🌧</button>
         <button className={`chip ${env.clouds ? 'on' : ''}`} onClick={() => setEnv({ clouds: !env.clouds })} title="Clouds">☁</button>
       </div>
@@ -228,6 +229,7 @@ function SpanInfo({ id }: { id: string }) {
       <Row k="Circuits" v={`${data.lay.circuits} × 3-phase`} />
       <Row k="Conductor" v={V.conductor} />
       <Row k="Wires in span" v={`${nPhase} phase + ${nGW} OPGW/GW`} />
+      <Row k="ROW corridor" v={`±${V.rowHalfWidthM} m from CL (${V.rowHalfWidthM * 2} m total)`} />
       {isFinite(data.clearance) && (
         <Row k="Min. ground clearance" v={<span className={data.clearance < minClear ? 'bad' : 'ok'}>{data.clearance.toFixed(1)} m</span>} />
       )}
@@ -312,6 +314,15 @@ function NetworkPanel() {
             <span><i className="lg on" /> Energised</span>
             <span><i className="lg off" /> Not connected to a source</span>
             <span><i className="lg build" /> Stringing</span>
+            <span><i className="lg row" /> Centerline &amp; ROW corridor</span>
+            <div className="cl-legend">
+              {(['v500', 'v230', 'v138', 'v115', 'v69', 'v13'] as VoltageId[]).map((v) => (
+                <span key={v} title={`${VOLTAGES[v].label}: ${VOLTAGES[v].centerlineColor} · ±${VOLTAGES[v].rowHalfWidthM} m ROW`}>
+                  <i className="cl-dot" style={{ background: VOLTAGES[v].centerlineColor }} />
+                  {VOLTAGES[v].label.replace(' kV', '')}
+                </span>
+              ))}
+            </div>
           </div>
         </>
       )}
@@ -635,6 +646,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <Toggle label="Place labels" v={env.labels} on={(v) => setEnv({ labels: v })} />
+        <Toggle label="ROW corridor overlay (NGCP)" v={env.row} on={(v) => setEnv({ row: v })} />
         <label className="slider">Terrain exaggeration <b>×{env.exaggeration.toFixed(1)}</b>
           <input type="range" min={1} max={3} step={0.5} value={env.exaggeration} onChange={(e) => setEnv({ exaggeration: parseFloat(e.target.value) })} />
         </label>

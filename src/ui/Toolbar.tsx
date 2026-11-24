@@ -116,6 +116,7 @@ export function Toolbar() {
               <span>{VOLTAGES[voltage].conductor}</span>
               <span>{VOLTAGES[voltage].groundWires} × OPGW / ground wire</span>
               <span>Ruling span ≈ {Math.round(VOLTAGES[voltage].maxSpan * 0.82)} m</span>
+              <span>ROW ±{VOLTAGES[voltage].rowHalfWidthM} m from CL ({VOLTAGES[voltage].rowHalfWidthM * 2} m)</span>
             </div>
           )}
         </div>

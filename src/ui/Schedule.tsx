@@ -207,10 +207,10 @@ export function SchedulePanel({ onClose }: { onClose: () => void }) {
           <button className="primary" onClick={doExport} disabled={busy || rows.length === 0} title="Download as an Excel workbook (.xlsx)">
             {busy ? 'Exporting…' : 'Export to Excel'}
           </button>
-          <button className="primary earth" onClick={exportKmz} disabled={rows.length === 0} title="Download pins for every structure (and the lines) as a Google Earth .kmz">
+          <button className="primary earth" onClick={exportKmz} disabled={rows.length === 0} title="Download structures, lines, and ROW corridors as a Google Earth .kmz">
             Export to Google Earth
           </button>
-          <button className="primary cad" onClick={doExportDwg} disabled={dwgBusy || rows.length === 0} title="Download structures and lines with PRS92 / PTM coordinates as an AutoCAD .dwg">
+          <button className="primary cad" onClick={doExportDwg} disabled={dwgBusy || rows.length === 0} title="Download structures, lines, and ROW corridors with PRS92 / PTM coordinates as an AutoCAD .dwg">
             {dwgBusy ? 'Exporting…' : 'Export to DWG'}
           </button>
           <button className="x" onClick={onClose} title="Close">×</button>

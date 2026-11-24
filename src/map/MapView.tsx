@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { DEF_BY_ID } from '../catalog/structures';
 import { VOLTAGES } from '../catalog/voltages';
 import { PH_MAX_BOUNDS, PH_POLY, PH_VIEW_BOUNDS } from '../core/geo';
+import { buildRowCorridorsGeo } from '../core/row';
 import { useHud, useStore } from '../core/store';
 import { Controller } from './controller';
 import { skyColors, SUN } from './environment';
@@ -46,6 +47,8 @@ const style: StyleSpecification = {
     },
     ovLines: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
     ovPoints: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+    rowCorridor: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+    rowCenterline: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
   },
   layers: [
     { id: 'bg', type: 'background', paint: { 'background-color': '#0c2236' } },
@@ -58,6 +61,41 @@ const style: StyleSpecification = {
     },
     { id: 'mask', type: 'fill', source: 'mask', paint: { 'fill-color': '#040b14', 'fill-opacity': 0.38 } },
     { id: 'labels', type: 'raster', source: 'labels', paint: { 'raster-opacity': 0.9 } },
+    {
+      id: 'row-fill', type: 'fill', source: 'rowCorridor',
+      paint: {
+        'fill-color': ['get', 'color'],
+        'fill-opacity': 0.14,
+      },
+    },
+    {
+      id: 'row-line', type: 'line', source: 'rowCorridor',
+      layout: { 'line-cap': 'butt', 'line-join': 'miter' },
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.2, 14, 2.0, 18, 2.6],
+        'line-dasharray': [5, 3],
+        'line-opacity': 0.88,
+      },
+    },
+    {
+      id: 'row-cl-casing', type: 'line', source: 'rowCenterline',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': 'rgba(0, 0, 0, 0.55)',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 3.2, 14, 4.6, 18, 5.6],
+        'line-opacity': 0.85,
+      },
+    },
+    {
+      id: 'row-cl', type: 'line', source: 'rowCenterline',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.8, 14, 2.8, 18, 3.6],
+        'line-opacity': 1,
+      },
+    },
     {
       id: 'ov-glow', type: 'line', source: 'ovLines', filter: ['==', ['get', 'on'], true],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -111,7 +149,29 @@ function overview() {
       geometry: { type: 'Point' as const, coordinates: [s.lng, s.lat] },
     };
   });
-  return { lines: { type: 'FeatureCollection' as const, features: lines }, points: { type: 'FeatureCollection' as const, features: points } };
+  const corridors = buildRowCorridorsGeo(structures, spans);
+  const rowFeatures = corridors.map((c) => ({
+    type: 'Feature' as const,
+    properties: { color: c.color, halfWidthM: c.halfWidthM, label: c.label },
+    geometry: {
+      type: 'Polygon' as const,
+      coordinates: [c.polygon.map((p) => [p.lng, p.lat])],
+    },
+  }));
+  const clFeatures = corridors.map((c) => ({
+    type: 'Feature' as const,
+    properties: { color: c.color, label: c.label },
+    geometry: {
+      type: 'LineString' as const,
+      coordinates: c.centerline.map((p) => [p.lng, p.lat]),
+    },
+  }));
+  return {
+    lines: { type: 'FeatureCollection' as const, features: lines },
+    points: { type: 'FeatureCollection' as const, features: points },
+    row: { type: 'FeatureCollection' as const, features: rowFeatures },
+    cl: { type: 'FeatureCollection' as const, features: clFeatures },
+  };
 }
 
 export function MapView() {
@@ -151,6 +211,8 @@ export function MapView() {
         const o = overview();
         (map.getSource('ovLines') as GeoJSONSource | undefined)?.setData(o.lines);
         (map.getSource('ovPoints') as GeoJSONSource | undefined)?.setData(o.points);
+        (map.getSource('rowCorridor') as GeoJSONSource | undefined)?.setData(o.row);
+        (map.getSource('rowCenterline') as GeoJSONSource | undefined)?.setData(o.cl);
       }, 120);
     };
 
@@ -158,7 +220,7 @@ export function MapView() {
     const applyEnv = () => {
       if (!map.isStyleLoaded()) return;
       const env = useStore.getState().env;
-      const key = `${env.rain}|${env.basemap}|${env.labels}|${env.exaggeration}`;
+      const key = `${env.rain}|${env.basemap}|${env.labels}|${env.exaggeration}|${env.row}`;
       if (key === lastEnv) return;
       const prev = lastEnv.split('|');
       lastEnv = key;
@@ -175,6 +237,11 @@ export function MapView() {
         map.setPaintProperty(id, 'raster-saturation', env.rain ? -0.25 : 0);
       }
       map.setLayoutProperty('labels', 'visibility', env.labels ? 'visible' : 'none');
+      const rowVis = env.row ? 'visible' : 'none';
+      map.setLayoutProperty('row-fill', 'visibility', rowVis);
+      map.setLayoutProperty('row-line', 'visibility', rowVis);
+      map.setLayoutProperty('row-cl-casing', 'visibility', rowVis);
+      map.setLayoutProperty('row-cl', 'visibility', rowVis);
       map.setPaintProperty('hillshade', 'hillshade-illumination-direction', SUN.azimuth);
       map.setPaintProperty('hillshade', 'hillshade-exaggeration', 0.45);
       if (prev[3] !== String(env.exaggeration)) map.setTerrain({ source: 'dem', exaggeration: env.exaggeration });
